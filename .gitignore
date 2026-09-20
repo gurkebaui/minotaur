@@ -1,0 +1,6 @@
+/__pycache--
+.env
+.txt
+.pt
+/checkpoints
+.safetensors
