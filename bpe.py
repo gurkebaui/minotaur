@@ -1,6 +1,14 @@
 
 import numpy as np
-vocab_size = 1000  # Example vocabulary size, can be adjusted as needed
+
+"""
+AI USAGE:
+i used ai to look up numpy functions.
+i used ai to write the loop ( only this line  while len(vocab) < vocab_size:  cause i am that lazy) and the replace_pair function.
+and it added some print satements and cleaned a bit.
+"""
+
+vocab_size = 300  # Target vocabulary size
 
 
 def load_data(file_path):
@@ -16,36 +24,60 @@ def load_data(file_path):
     return char_array
 
 
-def bpe_encode(data, vocab_size):
-    vocab = np.unique(data)
-    vocab = vocab[:vocab_size]  # Limit the vocabulary size
-    print(f"Vocabulary (size {len(vocab)}): {vocab}")
+def replace_pair(data, pair):
+    merged = pair[0] + pair[1]
+    result = []
+    i = 0
 
-    pair_counts = {}
-    for i in range(len(data) - 1):
-        pair = (data[i], data[i + 1])
-        if pair in pair_counts:
-            pair_counts[pair] += 1
+    while i < len(data):
+        if i + 1 < len(data) and data[i] == pair[0] and data[i + 1] == pair[1]:
+            result.append(merged)
+            i += 2
         else:
-            pair_counts[pair] = 1
+            result.append(data[i])
+            i += 1
 
-    print(f"Pair counts (size {len(pair_counts)}): {pair_counts}")
-
-    if not pair_counts:
-        print("No adjacent character pairs found; input must contain at least two characters.")
-        return
-
-    most_frequent_pair = max(pair_counts, key=pair_counts.get)
-    print(f"Most frequent pair: {most_frequent_pair} with count {pair_counts[most_frequent_pair]}")
+    return result
 
 
+def bpe_encode(data, vocab_size):
+    data = [str(token) for token in data] # conv to list 
+    vocab = set(data)
+    print(f"Init vocabu(size {len(vocab)}): {sorted(vocab)}")
 
+    # count pairs untill vocab is reached
+    while len(vocab) < vocab_size: 
+        # count the pairs
+        pair_counts = {}
+        for i in range(len(data) - 1):
+            pair = (data[i], data[i + 1])
+            pair_counts[pair] = pair_counts.get(pair, 0) + 1
+
+        if not pair_counts:
+            print("No adjacent character pairs found.")
+            break
+
+        most_frequent_pair = max(pair_counts, key=pair_counts.get) #get most freq pair
+        merged = most_frequent_pair[0] + most_frequent_pair[1] # merge 
+        data = replace_pair(data, most_frequent_pair) # replace
+        vocab.add(merged) # and add
+
+        print(
+            f"Merged {most_frequent_pair} into {merged!r}; "
+            f"vocabulary size: {len(vocab)}"
+        )
+
+    print(f"Final vocabulary (size {len(vocab)}): {sorted(vocab)}") #done
+    return data, vocab
 
 
 def main():
     print("main")
     print("")
-    bpe_encode(load_data("tsv.txt"), vocab_size)
+    encoded_data, vocab = bpe_encode(load_data("tsv.txt"), vocab_size)
+    print(f"Encoded data length: {len(encoded_data)}")
+    print(f"First 50 tokens: {encoded_data[:50]}")
+
 
 if __name__ == "__main__":
     main()
