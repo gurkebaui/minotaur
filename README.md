@@ -27,3 +27,12 @@ The script reads `tsv.txt` from the project directory and prints vocabulary and 
 ## Where this is going
 
 This project is a NumPy trial and a stepping stone toward deeper machine-learning work. Future versions will focus more on PyTorch, neural networks, and practical ML experiments.
+
+
+## Dataset
+
+I used the training split of  roneneldan/TinyStories dataset downloaded as a txt
+
+## AI usage
+
+AI usage is labled in the code. 
