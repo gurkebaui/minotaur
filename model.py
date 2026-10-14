@@ -27,7 +27,7 @@ class CSA(nn.Module):
         mask = torch.triu(torch.full((T, T), float('-inf'), device=x.device), diagonal=1)#nsh
         scores = scores + mask
 
-        attn_weights = torch.softmax(scores, dim=1)
+        attn_weights = torch.softmax(scores, dim=-1)
         out = torch.matmul(attn_weights, v)
 
         out = out.transpose(1, 2).contiguous().view(B, T, C)
