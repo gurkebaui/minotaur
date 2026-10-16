@@ -23,6 +23,7 @@ class CustomDataset(Dataset):
                 break
 
         all_tokens = torch.tensor(tokens_list, dtype=torch.long)
+        all_tokens = torch.clamp(all_tokens, min=0, max=len(self.tokenizer)-1)
 
         chunk_size = seq_len +1
         num_chunks = len(all_tokens) // chunk_size

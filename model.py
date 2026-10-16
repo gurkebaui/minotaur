@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from data import CustomDataset
 
 class CSA(nn.Module):
     def __init__(self, d_model=256, n_heads=8):
@@ -36,7 +37,8 @@ class CSA(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, vocab_size=50257, d_model=256, max_seq_len=64):
         super().__init__()
-        self.vocab_size = vocab_size
+        self.dataset = CustomDataset()
+        self.vocab_size = len(self.dataset.tokenizer)
         self.d_model = d_model
 
         self.tok_emb = nn.Embedding(vocab_size, d_model)

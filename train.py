@@ -2,36 +2,43 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from model import Transformer
+from data import CustomDataset
+from torch.utils.data import Dataset, DataLoader
 
 class Trainer(nn.Module):
-    def __init__(self, vocab_size=50257, seq_len=32, batch_size=8, d_model=128):
+    def __init__(self, vocab_size=50257, seq_len=64, batch_size=8, d_model=128):
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = Transformer(vocab_size=vocab_size, d_model=d_model, max_seq_len=seq_len).to(self.device)
+        self.dataset = CustomDataset()
+        self.model = Transformer(vocab_size=len(self.dataset.tokenizer), d_model=d_model, max_seq_len=seq_len).to(self.device)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(),lr=0.001)
-        self.vocab_size = vocab_size
+        self.vocab_size = len(self.dataset.tokenizer)
+        self.dataloader = DataLoader(self.dataset, batch_size=32, shuffle=True)
 
-        self.fixed_seq = torch.randint(0, vocab_size, (batch_size, seq_len + 1), device=self.device)
+        #self.fixed_seq = self.data()
 
         print(f"Starte Training auf {self.device}...")
         self.model.train()
 
     def train(self):
-        for epoch in range(100):
-            
-            x = self.fixed_seq[:,:-1]
-            y = self.fixed_seq[:,1:]
+        for epoch in range(5):
+            for batch_x, batch_y in self.dataloader:
+                batch_x = batch_x.to(self.device)
+                batch_y = batch_y.to(self.device)
 
-            self.optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
-            logits = self.model(x)
+                #print(f"Min tokenid {batch_x.min().item()} max id {batch_x.max().item()}")
+                
 
-            loss = self.criterion(logits.view(-1, self.vocab_size), y.reshape(-1))
+                logits = self.model(batch_x)
 
-            loss.backward()
+                loss = self.criterion(logits.view(-1, self.vocab_size), batch_y.reshape(-1))
 
-            self.optimizer.step()
+                loss.backward()
+
+                self.optimizer.step()
 
             if(epoch +1) % 10 == 0:
                 print(f"Epoch {epoch+1:3d}/100 | Loss {loss.item():.4f}")
