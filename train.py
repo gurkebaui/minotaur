@@ -26,7 +26,7 @@ class Trainer(nn.Module):
         self.model.train()
 
     def train(self):
-        for epoch in range(1):
+        for epoch in range(3):
             for batch_x, batch_y in self.dataloader:
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
@@ -45,7 +45,7 @@ class Trainer(nn.Module):
                 self.optimizer.step()
 
             if(epoch +1) % 1 == 0:
-                print(f"Epoch {epoch+1:3d}/100 | Loss {loss.item():.4f}")
+                print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f}")
         
         print(f"\nFinished Training!")
         print("saving...")
