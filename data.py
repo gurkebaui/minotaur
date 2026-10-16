@@ -4,10 +4,10 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 
 class CustomDataset(Dataset):
-    def __init__(self, numSamples=1000, seq_len=64):
+    def __init__(self, max_samples=1000, seq_len=64):
         print("lade datenset")
         super().__init__()
-        dataset = load_dataset("roneneland/TinyStories", split="train", streaming=True)
+        dataset = load_dataset("roneneldan/TinyStories", split="train", streaming=True)
 
         self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
