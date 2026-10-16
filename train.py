@@ -68,15 +68,13 @@ class Trainer(nn.Module):
                 loss = self.criterion(logits.view(-1, self.vocab_size), batch_y.reshape(-1))
 
                 losses.append(loss.item())
-                print(f"Loss. {loss.item():.4f}")
-                if(loss <= 1.3):
-                    correct += 1
-                total += batch_y.size(0)
+                #print(f"Loss. {loss.item():.4f}")
+                
 
-        accuracy = correct / total
-        print(f"Eval acc: {accuracy * 100:.2f}%")
-        avf_loss = statistics.fmean(losses)
-        print(f"Avg Loss: {avf_loss:.4f}")
+        avg_loss = statistics.fmean(losses)
+        print(f"Avg Loss: {avg_loss:.4f}")
+        ppl = torch.exp(torch.tensor(avg_loss)).item()
+        print(f"PPL: {ppl:.2f}")
                 
         
 
