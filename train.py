@@ -40,7 +40,7 @@ class Trainer(nn.Module):
 
                 self.optimizer.step()
 
-            if(epoch +1) % 10 == 0:
+            if(epoch +1) % 1 == 0:
                 print(f"Epoch {epoch+1:3d}/100 | Loss {loss.item():.4f}")
         
         print(f"\nFinished Training!")
