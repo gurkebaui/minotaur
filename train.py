@@ -4,7 +4,7 @@ import torch.optim as optim
 from model import Transformer
 
 class Trainer(nn.Module):
-    def __init__(self, vocab_size=128, seq_len=32, batch_size=8, d_model=128):
+    def __init__(self, vocab_size=50257, seq_len=32, batch_size=8, d_model=128):
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = Transformer(vocab_size=vocab_size, d_model=d_model, max_seq_len=seq_len).to(self.device)
