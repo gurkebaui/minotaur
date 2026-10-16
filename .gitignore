@@ -6,3 +6,9 @@ spickzettel/
 .txt
 .cv
 .json
+.pth
+.pt
+.safetensors
+models/
+checkpoints/
+
