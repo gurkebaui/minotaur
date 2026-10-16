@@ -37,8 +37,8 @@ class CSA(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, vocab_size=50257, d_model=256, max_seq_len=64):
         super().__init__()
-        self.dataset = CustomDataset()
-        self.vocab_size = len(self.dataset.tokenizer)
+        #self.dataset = CustomDataset()
+        self.vocab_size = 50257
         self.d_model = d_model
 
         self.tok_emb = nn.Embedding(vocab_size, d_model)
