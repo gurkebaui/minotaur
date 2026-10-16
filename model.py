@@ -34,7 +34,7 @@ class CSA(nn.Module):
         return self.out_proj(out)
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size=128, d_model=256, max_seq_len=64):
+    def __init__(self, vocab_size=50257, d_model=256, max_seq_len=64):
         super().__init__()
         self.vocab_size = vocab_size
         self.d_model = d_model
