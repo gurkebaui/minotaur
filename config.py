@@ -9,12 +9,12 @@ class ModelConfig:
     n_layers: int = 3
     max_seq_len: int = 64
     seq_len: int = 64
-    model_name: str = "test"
+    model_name: str = "mina"
 
     #Training praram
     batch_size: int = 32
     learning_rate: float = 1e-3
-    max_samples: int = 100
+    max_samples: int = 100000
     batch_size: int = 32
     epochs: int = 3
 

@@ -32,7 +32,7 @@ def sample_next_token(logits, temperature=0.8, top_k=50, top_p=0.9):
     return next_token
 
 class Generator():
-    def __init__(self, cfg, max_new_tokens=50, checkpoint_path="checkpoints/test_2026-10-19_13-02.pth"):
+    def __init__(self, cfg, max_new_tokens=50, checkpoint_path="checkpoints/mina_2026-10-19_13-07.pth"):
         print("prepping model")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
