@@ -6,19 +6,21 @@ from data import CustomDataset
 from eval_data import EvalDataset
 from torch.utils.data import Dataset, DataLoader
 import statistics
+from config import ModelConfig
 
 class Trainer(nn.Module):
-    def __init__(self, vocab_size=50257, seq_len=64, batch_size=8, d_model=128):
+    def __init__(self, cfg):
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.eval_dataset = EvalDataset()
-        self.dataset = CustomDataset()
-        self.model = Transformer(vocab_size=len(self.dataset.tokenizer), d_model=d_model, max_seq_len=seq_len).to(self.device)
+        self.eval_dataset = EvalDataset(cfg)
+        self.dataset = CustomDataset(cfg)
+        self.model = Transformer(cfg).to(self.device)
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(),lr=0.001)
+        self.optimizer = optim.Adam(self.model.parameters(),lr=cfg.learning_rate)
         self.vocab_size = len(self.dataset.tokenizer)
-        self.dataloader = DataLoader(self.dataset, batch_size=32, shuffle=True)
-        self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=32, shuffle=False)
+        self.dataloader = DataLoader(self.dataset, batch_size=cfg.batch_size, shuffle=True)
+        self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=cfg.batch_size, shuffle=False)
+        self.epochs = cfg.epochs
 
         #self.fixed_seq = self.data()
 
@@ -26,7 +28,7 @@ class Trainer(nn.Module):
         self.model.train()
 
     def train(self):
-        for epoch in range(3):
+        for epoch in range(self.epochs):
             for batch_x, batch_y in self.dataloader:
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
@@ -79,6 +81,7 @@ class Trainer(nn.Module):
         
 
 if __name__ == "__main__":
-    t = Trainer()
+    cfg = ModelConfig()
+    t = Trainer(cfg)
     t.train()
     t.eval()

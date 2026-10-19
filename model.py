@@ -2,18 +2,19 @@ import torch
 import torch.nn as nn
 import math
 from data import CustomDataset
+from config import ModelConfig 
 
 class CSA(nn.Module):
-    def __init__(self, d_model=256, n_heads=8):
+    def __init__(self, cfg):
         super().__init__()
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.d_k = d_model // n_heads #nsh
+        self.d_model = cfg.d_model
+        self.n_heads = cfg.n_heads
+        self.d_k = cfg.d_model // cfg.n_heads 
 
-        self.q_proj = nn.Linear(d_model, d_model)
-        self.k_proj = nn.Linear(d_model, d_model)
-        self.v_proj = nn.Linear(d_model, d_model)
-        self.out_proj = nn.Linear(d_model, d_model)
+        self.q_proj = nn.Linear(cfg.d_model, cfg.d_model)
+        self.k_proj = nn.Linear(cfg.d_model, cfg.d_model)
+        self.v_proj = nn.Linear(cfg.d_model, cfg.d_model)
+        self.out_proj = nn.Linear(cfg.d_model, cfg.d_model)
 
     def forward(self, x):
         B, T, C = x.shape #what are btc here? they in torch?
@@ -35,25 +36,19 @@ class CSA(nn.Module):
         return self.out_proj(out)
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size=50257, d_model=256, max_seq_len=64):
+    def __init__(self, cfg):
         super().__init__()
         #self.dataset = CustomDataset()
-        self.vocab_size = 50257
-        self.d_model = d_model
+        self.vocab_size = cfg.vocab_size
+        self.d_model = cfg.d_model
 
-        self.tok_emb = nn.Embedding(vocab_size, d_model)
-        self.pos_emb = nn.Embedding(max_seq_len, d_model)
+        self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.d_model)
+        self.pos_emb = nn.Embedding(cfg.max_seq_len, cfg.d_model)
 
-        self.ln1 = nn.LayerNorm(d_model)
-        self.attn = CSA(d_model=d_model, n_heads=8)
+        self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
+        self.ln_f = nn.LayerNorm(cfg.d_model)
 
-        self.ln2 = nn.LayerNorm(d_model)
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, 4*d_model),
-            nn.GELU(),
-            nn.Linear(4*d_model, d_model)
-        )
-        self.lm_head = nn.Linear(d_model, vocab_size)
+        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size)
 
     def forward(self, x):
         B, T = x.shape
@@ -61,16 +56,39 @@ class Transformer(nn.Module):
         pos = torch.arange(0, T, device=x.device)
 
         h = self.tok_emb(x) + self.pos_emb(pos)
+        
+        for block in self.blocks:
+            h = block(h)
 
-        h = h + self.attn(self.ln1(h))
-        h = h + self.ffn(self.ln2(h))
+            
+        h = self.ln_f(h)
 
         logits = self.lm_head(h)
         return logits
 
+
+class TransformerBlock(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(cfg.d_model)
+        self.attn = CSA(cfg)
+        self.ln2 = nn.LayerNorm(cfg.d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(cfg.d_model, 4*cfg.d_model),
+            nn.GELU(),
+            nn.Linear(4*cfg.d_model, cfg.d_model)
+        )
+
+    def forward(self, x):
+        x = x + self.attn(self.ln1(x))
+        x = x + self.ffn(self.ln2(x))
+        return x
+    
+
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    t = Transformer().to(device)
+    cfg = ModelConfig()
+    t = Transformer(cfg).to(device)
     x = torch.randint(0,128, (4, 16), device=device)
     y = t(x)
     print("Input shape: ", x.shape)

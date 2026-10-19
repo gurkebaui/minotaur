@@ -1,14 +1,17 @@
 spickzettel/
-.pdf
+*.pdf
  __pycache__/
 .venv/
-.env
-.txt
-.cv
-.json
-.pth
-.pt
-.safetensors
+*.env
+*.txt
+*.cv
+*.json
+*.pth
+*.pt
+*.safetensors
 models/
 checkpoints/
+__pycache__/
+*.py[cod]
+*$py.class
 

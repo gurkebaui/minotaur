@@ -2,6 +2,7 @@ import torch
 from transformers import AutoTokenizer
 from model import Transformer
 import torch.nn.functional as F
+from config import ModelConfig
 
 
 
@@ -31,16 +32,16 @@ def sample_next_token(logits, temperature=0.8, top_k=50, top_p=0.9):
     return next_token
 
 class Generator():
-    def __init__(self, max_new_tokens=50, checkpoint_path="model.pth"):
+    def __init__(self, cfg, max_new_tokens=50, checkpoint_path="model.pth"):
         print("prepping model")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
 
-        self.d_model = 128
-        self.max_seq_len = 64
+        self.d_model = cfg.d_model
+        self.max_seq_len = cfg.max_seq_len
         self.vocab_size = len(self.tokenizer)
 
-        self.model = Transformer(vocab_size=self.vocab_size, d_model=self.d_model, max_seq_len=self.max_seq_len)
+        self.model = Transformer(cfg)
         self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
@@ -74,6 +75,7 @@ class Generator():
     
 
 if __name__ == "__main__":
-    g = Generator()
+    cfg = ModelConfig()
+    g = Generator(cfg)
     g.generate(prompt="Once upon a time", max_new_tokens=50)
     

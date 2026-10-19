@@ -4,7 +4,7 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 
 class EvalDataset(Dataset):
-    def __init__(self, max_samples=100, seq_len=64):
+    def __init__(self, cfg):
         print("lade datenset")
         super().__init__()
         dataset = load_dataset("roneneldan/TinyStories", split="validation", streaming=True)
@@ -19,18 +19,18 @@ class EvalDataset(Dataset):
             encoded = self.tokenizer.encode(text)
             tokens_list.extend(encoded)
             count += 1
-            if count >= max_samples:
+            if count >= cfg.max_samples:
                 break
 
         all_tokens = torch.tensor(tokens_list, dtype=torch.long)
         all_tokens = torch.clamp(all_tokens, min=0, max=len(self.tokenizer)-1)
 
-        chunk_size = seq_len +1
+        chunk_size = cfg.seq_len +1
         num_chunks = len(all_tokens) // chunk_size
 
         all_tokens = all_tokens[:num_chunks * chunk_size]
         self.chunks = all_tokens.view(num_chunks, chunk_size)
-        print(f"Chunks: {num_chunks} deren Länge{seq_len}")
+        print(f"Chunks: {num_chunks} deren Länge{cfg.seq_len}")
         
 
     def __len__(self):
