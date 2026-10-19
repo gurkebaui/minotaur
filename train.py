@@ -7,6 +7,8 @@ from eval_data import EvalDataset
 from torch.utils.data import Dataset, DataLoader
 import statistics
 from config import ModelConfig
+import os
+from datetime import datetime
 
 class Trainer(nn.Module):
     def __init__(self, cfg):
@@ -21,6 +23,11 @@ class Trainer(nn.Module):
         self.dataloader = DataLoader(self.dataset, batch_size=cfg.batch_size, shuffle=True)
         self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=cfg.batch_size, shuffle=False)
         self.epochs = cfg.epochs
+
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        os.makedirs("checkpoints", exist_ok=True)
+        self.checkpoint_path = f"checkpoints/{cfg.model_name}_{timestamp}.pth"
 
         #self.fixed_seq = self.data()
 
@@ -51,8 +58,8 @@ class Trainer(nn.Module):
         
         print(f"\nFinished Training!")
         print("saving...")
-        torch.save(self.model.state_dict(), "model.pth")
-        print("saved")
+        torch.save(self.model.state_dict(), self.checkpoint_path)
+        print(f"saved at {self.checkpoint_path}")
 
     def eval(self):
         self.model.eval()

@@ -9,6 +9,7 @@ class ModelConfig:
     n_layers: int = 3
     max_seq_len: int = 64
     seq_len: int = 64
+    model_name: str = "test"
 
     #Training praram
     batch_size: int = 32
@@ -16,3 +17,4 @@ class ModelConfig:
     max_samples: int = 100
     batch_size: int = 32
     epochs: int = 3
+
