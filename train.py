@@ -25,7 +25,7 @@ class Trainer(nn.Module):
         self.epochs = cfg.epochs
 
 
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M")
         os.makedirs("checkpoints", exist_ok=True)
         self.checkpoint_path = f"checkpoints/{cfg.model_name}_{timestamp}.pth"
 
@@ -54,9 +54,9 @@ class Trainer(nn.Module):
                 self.optimizer.step()
 
             if(epoch +1) % 1 == 0:
-                print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f}")
+                print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f} {datetime.now().strftime('%H:%M:%S')}")
         
-        print(f"\nFinished Training!")
+        print(f"\nFinished Training! at {datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}")
         print("saving...")
         torch.save(self.model.state_dict(), self.checkpoint_path)
         print(f"saved at {self.checkpoint_path}")

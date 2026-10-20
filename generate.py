@@ -32,7 +32,7 @@ def sample_next_token(logits, temperature=0.8, top_k=50, top_p=0.9):
     return next_token
 
 class Generator():
-    def __init__(self, cfg, max_new_tokens=50, checkpoint_path="checkpoints/mina_2026-10-19_13-07.pth"):
+    def __init__(self, cfg, max_new_tokens=50, checkpoint_path="checkpoints/Emilia_2026-10-20_13-50.pth"):
         print("prepping model")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -57,7 +57,7 @@ class Generator():
 
                     next_token_logits = logits[:,-1,:]
 
-                    #next_token = torch.argmax(next_token_logits, dim=1, keepdim=True)
+                    #next_token = torch.argmax(next_token_logits, dim=1, keepdim=True) # depreciated
                     next_token = sample_next_token(
                                                    next_token_logits,
                                                     temperature=0.8,
