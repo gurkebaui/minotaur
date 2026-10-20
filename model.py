@@ -1,5 +1,5 @@
 from typing import Any
-
+import torch.nn.functional as F
 import torch
 import torch.nn as nn
 import math
@@ -67,6 +67,22 @@ class CSA(nn.Module):
         return self.out_proj(out)
 
 
+class SwiGLU_FFN(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        hidden_dim = int(8 * d_model / 3)
+        hidden_dim = ((hidden_dim + 63) // 64) * 64 #auf ein vielfaches von 64 runden
+
+        self.w_gate = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_up = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_down = nn.Linear(hidden_dim, d_model, bias=False)
+
+    def forward(self, x):
+        gate = F.silu(self.w_gate(x))
+
+        x_gated = gate * self.w_up(x)
+
+        return self.w_down(x_gated)
 
 
 class RMSNorm(nn.Module):
@@ -121,11 +137,7 @@ class TransformerBlock(nn.Module):
         self.ln1 = RMSNorm(cfg)
         self.attn = CSA(cfg)
         self.ln2 = RMSNorm(cfg)
-        self.ffn = nn.Sequential(
-            nn.Linear(cfg.d_model, 4*cfg.d_model),
-            nn.GELU(),
-            nn.Linear(4*cfg.d_model, cfg.d_model)
-        )
+        self.ffn = SwiGLU_FFN(cfg.d_model)
 
     def forward(self, x):
         x = x + self.attn(self.ln1(x))
