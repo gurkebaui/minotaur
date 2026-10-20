@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch
 import torch.nn as nn
 import math
@@ -35,6 +37,21 @@ class CSA(nn.Module):
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.out_proj(out)
 
+
+
+
+class RMSNorm(nn.Module):
+    def __init__(self, cfg, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(cfg.d_model))
+
+    def forward(self, x):
+        variance = x.pow(2).mean(-1, keepdim=True)
+        rms = torch.rsqrt(variance + self.eps)
+
+        return x * rms * self.weight 
+
 class Transformer(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -46,7 +63,7 @@ class Transformer(nn.Module):
         self.pos_emb = nn.Embedding(cfg.max_seq_len, cfg.d_model)
 
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
-        self.ln_f = nn.LayerNorm(cfg.d_model)
+        self.ln_f = RMSNorm(cfg)
 
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
 
@@ -72,9 +89,9 @@ class Transformer(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.ln1 = nn.LayerNorm(cfg.d_model)
+        self.ln1 = RMSNorm(cfg)
         self.attn = CSA(cfg)
-        self.ln2 = nn.LayerNorm(cfg.d_model)
+        self.ln2 = RMSNorm(cfg)
         self.ffn = nn.Sequential(
             nn.Linear(cfg.d_model, 4*cfg.d_model),
             nn.GELU(),
