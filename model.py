@@ -6,6 +6,26 @@ import math
 from data import CustomDataset
 from config import ModelConfig 
 
+
+
+def precompute_rope_freqs(d_k, max_seq_len, device):
+    inv_freq = 1.0 / (10000 ** torch.arange(0, d_k, 2, dtype=torch.float32, device="cpu") / d_k)
+    t = torch.arange(max_seq_len, dtype=torch.float32, device=device)
+    freqs = torch.outer(t, inv_freq)
+
+    emb = torch.cat((freqs, freqs), dim=-1)
+    return emb.cos(), emb.sin()
+
+def apply_rotary_emb(x, cos, sin):
+    T = x.shape[-2]
+    cos = cos[:T, :].unsqueeze(0).unsqueeze(1)
+    sin = sin[:T, :].unsqueeze(0).unsqueeze(1)
+
+    x_rot = torch.cat((-x[..., x.shape[-1]//-2:], x[..., :x.shape[-1]//2]), dim=-1)
+    return (x * cos) + (x_rot * sin)
+
+
+
 class CSA(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -18,6 +38,10 @@ class CSA(nn.Module):
         self.v_proj = nn.Linear(cfg.d_model, cfg.d_model)
         self.out_proj = nn.Linear(cfg.d_model, cfg.d_model)
 
+        cos, sin = precompute_rope_freqs(self.d_k, cfg.max_seq_len, device="cpu")
+        self.register_buffer("cos", cos, persistent=False)
+        self.register_buffer("sin", sin, persistent=False)
+
     def forward(self, x):
         B, T, C = x.shape #what are btc here? they in torch?
 
@@ -25,6 +49,11 @@ class CSA(nn.Module):
         q = self.q_proj(x).view(B, T, self.n_heads, self.d_k).transpose(1,2)
         k = self.k_proj(x).view(B, T, self.n_heads, self.d_k).transpose(1,2)
         v = self.v_proj(x).view(B, T, self.n_heads, self.d_k).transpose(1,2)
+
+
+        q = apply_rotary_emb(q, self.cos.to(x.device), self.sin.to(x.device))
+        k = apply_rotary_emb(k, self.cos.to(x.device), self.sin.to(x.device))
+
 
         scores = torch.matmul(q, k.transpose(-2,-1)) / math.sqrt(self.d_k) #what happens
         
@@ -60,7 +89,7 @@ class Transformer(nn.Module):
         self.d_model = cfg.d_model
 
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.d_model)
-        self.pos_emb = nn.Embedding(cfg.max_seq_len, cfg.d_model)
+        #self.pos_emb = nn.Embedding(cfg.max_seq_len, cfg.d_model) #depreciated
 
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
         self.ln_f = RMSNorm(cfg)
@@ -74,7 +103,7 @@ class Transformer(nn.Module):
 
         pos = torch.arange(0, T, device=x.device)
 
-        h = self.tok_emb(x) + self.pos_emb(pos)
+        h = self.tok_emb(x) 
         
         for block in self.blocks:
             h = block(h)
