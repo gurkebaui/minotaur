@@ -48,7 +48,9 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
         self.ln_f = nn.LayerNorm(cfg.d_model)
 
-        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size)
+        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+
+        self.lm_head.weight = self.tok_emb.weight
 
     def forward(self, x):
         B, T = x.shape
