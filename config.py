@@ -18,3 +18,10 @@ class ModelConfig:
     batch_size: int = 32
     epochs: int = 3
 
+
+
+@dataclass
+class DiTConfig:
+    num_train_timesteps: int = 1000
+    num_steps: int = 20
+
