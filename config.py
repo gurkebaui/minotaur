@@ -24,4 +24,6 @@ class ModelConfig:
 class DiTConfig:
     num_train_timesteps: int = 1000
     num_steps: int = 20
+    d_model: int = 128
+    
 
