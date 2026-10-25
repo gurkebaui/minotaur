@@ -26,3 +26,19 @@ class DiT(nn.Module):
         t_gated = gate * self.w_up(self.t)
         
         return self.w_down(t_gated)
+
+    def sinusodialTimestepEmbedding(self, timesteps, dim, cfg):
+        #timesteps = [B]
+        half_dim = dim // 2
+
+        #freq_i = 1000 ^-2i / d_model aber so wie es der comp mag
+        freqs = torch.exp(
+            -torch.arange(half_dim, dtype=torch.float32, device=timesteps.device) *
+            (math.log(cfg.max_period) / half_dim)
+        )
+
+        args = timesteps.unsqueeze(1) * freqs.unsqueeze(0)
+        #[B, half_dim]
+
+        embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1) 
+        return embedding               
