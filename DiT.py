@@ -21,6 +21,27 @@ def sinusodialTimestepEmbedding( timesteps, dim, cfg):
 
         embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1) 
         return embedding 
+
+
+class SwiGLU_FFN(nn.Module):
+    def __init__(self, d_model):
+        super().__init__()
+        hidden_dim = int(8 * d_model / 3)
+        hidden_dim = ((hidden_dim + 63) // 64) * 64 #auf ein vielfaches von 64 runden
+
+        self.w_gate = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_up = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_down = nn.Linear(hidden_dim, d_model, bias=False)
+
+    def forward(self, x):
+        gate = F.silu(self.w_gate(x))
+
+        x_gated = gate * self.w_up(x)
+
+        return self.w_down(x_gated)
+
+
+
 class DiTBlock(nn.Module):
 
     def __init__(self, cfg):
@@ -30,11 +51,7 @@ class DiTBlock(nn.Module):
 
         self.attn = nn.MultiheadAttention(cfg.d_model, num_heads=cfg.num_heads, batch_first=True)
 
-        self.ffn = nn.Sequential(
-            nn.Linear(cfg.d_model, cfg.d_model *4),
-            nn.SiLU(),
-            nn.Linear(4*cfg.d_model, cfg.d_model)
-        )
+        self.ffn = SwiGLU_FFN(cfg.d_model)
 
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
