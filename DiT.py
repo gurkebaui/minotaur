@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import math
 from config import DiTConfig
 
-def sinusodialTimestepEmbedding(self, timesteps, dim, cfg):
+def sinusodialTimestepEmbedding( timesteps, dim, cfg):
         #timesteps = [B]
         half_dim = dim // 2
 
@@ -81,7 +81,7 @@ class PatchEmbedding(nn.Module):
         #[B, H*W, d_model]
         return x
 class PosEmbedding(nn.Module):
-    def __init__(self, cfg, x):# x from patch_emb
+    def __init__(self, cfg):# x from patch_emb
         super().__init__()
         
         num_patches = (cfg.H // cfg.patch_size) * (cfg.W // cfg.patch_size)
@@ -89,3 +89,65 @@ class PosEmbedding(nn.Module):
         self.pos_emb = nn.Parameter(torch.randn(1, num_patches, cfg.d_model) * 0.02)
     def forward(self, x): #x from PatchEmb
         return x + self.pos_emb
+
+
+class DiT(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.t_embedder = nn.Sequential(
+            nn.Linear(cfg.d_model, cfg.d_model),
+            nn.SiLU(),
+            nn.Linear(cfg.d_model, cfg.d_model)
+        )
+
+        self.patch_emb = PatchEmbedding(cfg)
+        self.pos_emb = PosEmbedding(cfg)
+
+        self.blocks = nn.ModuleList(
+            [DiTBlock(cfg) for _ in range(cfg.num_layers)]
+        )
+
+        self.final_norm = nn.LayerNorm(cfg.d_model, elementwise_affine=False)
+        self.final_adaLN = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(cfg.d_model, 2*cfg.d_model, bias=True)
+        )
+
+        out_dim = cfg.patch_size * cfg.patch_size * cfg.in_channels
+        self.final_proj = nn.Linear(cfg.d_model, out_dim)
+
+    def unpatchify(self, x):
+        #[B, num_patches, patch_pixel]
+        c = self.cfg.in_channels
+        p = self.cfg.patch_size
+        h = self.cfg.H // p
+        w = self.cfg.W // p
+
+        #[B, h*w, p*p*c]
+        x = x.reshape(x.shape[0], h, w, p, p, c)
+        x = x.permute(0, 5, 1, 3, 2, 4).reshape(x.shape[0], c, h*p, w*p)
+        return x
+
+    def forward(self, x_t, t_idx):
+        #timestep emb
+        t_sin = sinusodialTimestepEmbedding(t_idx, self.cfg.d_model, self.cfg)
+        t_emb = self.t_embedder(t_sin)#[B, d]
+
+        x = self.patch_emb(x_t)
+        x = self.pos_emb(x)#[b, num_patches, d]
+
+        for block in self.blocks:
+            x = block(x, t_emb)
+
+        shift, scale = self.final_adaLN(t_emb).chunk(2, dim=-1)
+        scale = 1.0 + scale.unsqueeze(1)
+        shift = shift.unsqueeze(1)
+
+        x = self.final_norm(x) * scale + shift
+
+        x = self.final_proj(x)
+
+        prediction_noise = self.unpatchify(x)
+        return prediction_noise
+

@@ -31,5 +31,6 @@ class DiTConfig:
     W: int = 32
     H: int = 32
     num_heads: int = 8
+    num_layers: int = 3
     
 
