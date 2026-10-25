@@ -53,7 +53,8 @@ class DiTBlock(nn.Module):
         beta2 = beta2.unsqueeze(1)
 
         norm_x = self.norm1(x) * gamma1 + beta1
-        x = self.attn(norm_x, norm_x, norm_x) + x
+        attn_out, _ = self.attn(norm_x, norm_x, norm_x) 
+        x = attn_out + x
 
         norm_x = self.norm2(x) * gamma2 + beta2
         x = self.ffn(norm_x) + x
@@ -151,3 +152,15 @@ class DiT(nn.Module):
         prediction_noise = self.unpatchify(x)
         return prediction_noise
 
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    cfg = DiTConfig()
+    t = DiT(cfg).to(device)
+    
+    x_t = torch.randn(2, cfg.in_channels, cfg.H, cfg.W, dtype=torch.float32, device=device)
+    
+    x_idx = torch.tensor([10, 500], dtype=torch.long, device=device)
+    
+    y = t(x_t, x_idx)
+    print("Input shape: ", x_t.shape)
+    print("Output shape: ", y.shape)
