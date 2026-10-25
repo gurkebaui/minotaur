@@ -6,30 +6,7 @@ import torch.nn.functional as F
 import math
 from config import DiTConfig
 
-
-class DiT(nn.Module):
-
-    def __init__(self, t, x_t, x_0, cfg):
-        super().__init__()
-        self.t = t
-
-        hidden_dim = int(8 * cfg.d_model / 3)
-        hidden_dim = ((hidden_dim + 63) // 64) * 64 
-        self.w_gate = nn.Linear(self.t.size(), hidden_dim, bias=False)        
-        self.w_up = nn.Linear(self.t.size, hidden_dim, bias=False)
-        self.w_down = nn.Linear(hidden_dim, cfg.d_model, bias=False)
-
-
-    '''def TimestepEmbedding(self, cfg):
-        
-
-        gate = F.silu(self.w_gate(self.t))
-        
-        t_gated = gate * self.w_up(self.t)
-        
-        return self.w_down(t_gated)'''#depreciated
-
-    def sinusodialTimestepEmbedding(self, timesteps, dim, cfg):
+def sinusodialTimestepEmbedding(self, timesteps, dim, cfg):
         #timesteps = [B]
         half_dim = dim // 2
 
@@ -43,7 +20,47 @@ class DiT(nn.Module):
         #[B, half_dim]
 
         embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1) 
-        return embedding   
+        return embedding 
+class DiTBlock(nn.Module):
+
+    def __init__(self, cfg):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(cfg.d_model, elementwise_affine=False)
+        self.norm2 = nn.LayerNorm(cfg.d_model, elementwise_affine=False)
+
+        self.attn = nn.MultiheadAttention(cfg.d_model, num_heads=cfg.num_heads, batch_first=True)
+
+        self.ffn = nn.Sequential(
+            nn.Linear(cfg.d_model, cfg.d_model *4),
+            nn.SiLU(),
+            nn.Linear(4*cfg.d_model, cfg.d_model)
+        )
+
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(cfg.d_model, 4*cfg.d_model, bias=True)
+        )
+    def forward(self, x, t_emb):
+        #x shape [B, NumPatches, d_model]
+        #t_emb [B, d_mdoel]
+        ln_par = self.adaLN_modulation(t_emb)
+        #[b, 4*d]
+        gamma1, beta1, gamma2, beta2 = torch.chunk(ln_par, 4, dim=-1)
+        #[b,d]
+        gamma1 = 1 + gamma1.unsqueeze(1)#[b,1,d]
+        beta1 = beta1.unsqueeze(1)
+        gamma2 = 1+ gamma2.unsqueeze(1)
+        beta2 = beta2.unsqueeze(1)
+
+        norm_x = self.norm1(x) * gamma1 + beta1
+        x = self.attn(norm_x, norm_x, norm_x) + x
+
+        norm_x = self.norm2(x) * gamma2 + beta2
+        x = self.ffn(norm_x) + x
+        return x
+
+
+      
 
 
 class PatchEmbedding(nn.Module):

@@ -30,5 +30,6 @@ class DiTConfig:
     in_channels: int = 3
     W: int = 32
     H: int = 32
+    num_heads: int = 8
     
 
