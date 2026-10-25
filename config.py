@@ -26,5 +26,8 @@ class DiTConfig:
     num_steps: int = 20
     d_model: int = 128
     max_period: int = 10000
+    patch_size: int = 4
+    in_channels: int = 3
+    
     
 

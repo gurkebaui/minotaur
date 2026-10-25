@@ -18,14 +18,14 @@ class DiT(nn.Module):
         self.w_down = nn.Linear(hidden_dim, cfg.d_model, bias=False)
 
 
-    def TimestepEmbedding(self, cfg):
+    '''def TimestepEmbedding(self, cfg):
         
 
         gate = F.silu(self.w_gate(self.t))
         
         t_gated = gate * self.w_up(self.t)
         
-        return self.w_down(t_gated)
+        return self.w_down(t_gated)'''#depreciated
 
     def sinusodialTimestepEmbedding(self, timesteps, dim, cfg):
         #timesteps = [B]
@@ -41,4 +41,23 @@ class DiT(nn.Module):
         #[B, half_dim]
 
         embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1) 
-        return embedding               
+        return embedding   
+
+
+class PatchEmbedding(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.patch_size = cfg.patch_size
+        self.in_channels = cfg.in_channels
+        self.d_model = cfg.d_model
+        self.proj = nn.Conv2d(self.in_channels, self.d_model, self.patch_size, self.patch_size)
+
+    def forward(self, x):
+        #x [B, Channesl, Hight, Width]
+        x = self.proj(x)
+        #[B, d_model, H_patch, W_patch]
+        x = x.flatten(2, -1)
+        #[B, d_model, H*W]
+        x = x.transpose(1, -1)
+        #[B, H*W, d_model]
+        return x
