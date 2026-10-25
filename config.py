@@ -33,6 +33,6 @@ class DiTConfig:
     num_heads: int = 8
     num_layers: int = 3
     lr: float = 1e-4
-    max_steps: int = 101
+    max_steps: int = 21
     
 

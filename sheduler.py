@@ -11,4 +11,4 @@ class EulerScheduler:
         t = t_idx.float() / self.num_train_timesteps
         t= t.view(-1, 1, 1, 1)
         x_t = (1 - t) * x_0 + noise * t
-        return x_t, t
+        return x_t, noise
