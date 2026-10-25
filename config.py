@@ -28,6 +28,7 @@ class DiTConfig:
     max_period: int = 10000
     patch_size: int = 4
     in_channels: int = 3
-    
+    W: int = 32
+    H: int = 32
     
 

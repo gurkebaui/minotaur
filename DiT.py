@@ -1,3 +1,5 @@
+from typing import Any
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -61,3 +63,12 @@ class PatchEmbedding(nn.Module):
         x = x.transpose(1, -1)
         #[B, H*W, d_model]
         return x
+class PosEmbedding(nn.Module):
+    def __init__(self, cfg, x):# x from patch_emb
+        super().__init__()
+        
+        num_patches = (cfg.H // cfg.patch_size) * (cfg.W // cfg.patch_size)
+        #[B, W*H, d_model] [seq_len]
+        self.pos_emb = nn.Parameter(torch.randn(1, num_patches, cfg.d_model) * 0.02)
+    def forward(self, x): #x from PatchEmb
+        return x + self.pos_emb
