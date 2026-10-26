@@ -34,5 +34,10 @@ class DiTConfig:
     num_layers: int = 3
     lr: float = 1e-4
     max_steps: int = 21
+
+    #generator
+    num_samples: int = 4
+    inference_steps: int = 50
+    
     
 
