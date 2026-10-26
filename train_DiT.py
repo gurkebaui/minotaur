@@ -25,7 +25,8 @@ def train_loop():
         batch_size = x_0.shape[0]
 
         t_idx = torch.randint(0, scheduler.num_train_timesteps, (batch_size,), device=device)
-
+        print(f"t_idx: {t_idx}")
+        
         noise = torch.randn_like(x_0)
 
         x_t, target_noise = scheduler.add_noise(x_0, noise, t_idx)
