@@ -31,7 +31,7 @@ class Trainer(nn.Module):
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
-            is_embed_or_head = any(x in name for x in ['wte', 'wpe', 'embed', 'lm_head', 'classifier', 'output'])
+            is_embed_or_head = any(x in name for x in ['wte', 'wpe', 'embed', 'classifier', 'output'])
 
             if param.ndim == 2 and not is_embed_or_head:
                 muon_params.append(param)
