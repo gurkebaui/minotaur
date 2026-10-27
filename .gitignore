@@ -14,4 +14,5 @@ checkpoints/
 __pycache__/
 *.py[cod]
 *$py.class
-
+.kilo/
+.vscode/

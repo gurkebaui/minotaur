@@ -19,13 +19,15 @@ class Trainer(nn.Module):
         self.dataset = CustomDataset(cfg)
         self.model = Transformer(cfg).to(self.device)
         self.criterion = nn.CrossEntropyLoss()
-        #self.optimizer = optim.Adam(self.model.parameters(),lr=cfg.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(),lr=cfg.learning_rate)
         self.vocab_size = len(self.dataset.tokenizer)
         self.dataloader = DataLoader(self.dataset, batch_size=cfg.batch_size, shuffle=True)
         self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=cfg.batch_size, shuffle=False)
         self.epochs = cfg.epochs
 
 
+        #Muon is a bit more work, but it will come soon
+        '''
         muon_params = []
         adamw_params = [] 
         for name, param in self.model.named_parameters():
@@ -40,7 +42,7 @@ class Trainer(nn.Module):
 
         self.muon_opt = Muon(muon_params, lr=0.02, momentum=0.95)
         self.adamw_opt = AdamW(adamw_params, lr=3e-4, betas=(0.90, 0.95), weight_decay=0.01)
-
+        '''
 
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M")
@@ -58,8 +60,9 @@ class Trainer(nn.Module):
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
 
-                self.muon_opt.zero_grad()
-                self.adamw_opt.zero_grad()
+                #self.muon_opt.zero_grad()
+                #self.adamw_opt.zero_grad()
+                self.optimizer.zero_grad()
 
                 #print(f"Min tokenid {batch_x.min().item()} max id {batch_x.max().item()}")
                 
@@ -69,9 +72,10 @@ class Trainer(nn.Module):
                 loss = self.criterion(logits.view(-1, self.vocab_size), batch_y.reshape(-1))
 
                 loss.backward()
+                self.optimizer.step()
 
-                self.muon_opt.step()
-                self.adamw_opt.step()
+                #self.muon_opt.step()
+                #self.adamw_opt.step()
 
             if(epoch +1) % 1 == 0:
                 print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f} {datetime.now().strftime('%H:%M:%S')}")
