@@ -4,19 +4,19 @@ from dataclasses import dataclass
 class ModelConfig:
     #Architektur
     vocab_size: int = 50257
-    d_model: int = 128
+    d_model: int = 256
     n_heads: int = 8
-    n_layers: int = 6
+    n_layers: int = 12
     max_seq_len: int = 64
-    seq_len: int = 64
-    model_name: str = "Muon_1:"
+    seq_len: int = 128
+    model_name: str = "M:Muon_2:"
 
     #Training praram
     batch_size: int = 32
     learning_rate: float = 1e-3
-    max_samples: int = 10000
+    max_samples: int = 100000
     batch_size: int = 32
-    epochs: int = 3
+    epochs: int = 6
 
 
 
