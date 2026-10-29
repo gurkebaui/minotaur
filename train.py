@@ -36,7 +36,7 @@ class Trainer(nn.Module):
         self.dataset = CustomDataset(cfg)
         self.model = Transformer(cfg).to(self.device)
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(),lr=cfg.learning_rate)
+        #self.optimizer = optim.Adam(self.model.parameters(),lr=cfg.learning_rate)
         self.vocab_size = len(self.dataset.tokenizer)
         self.dataloader = DataLoader(self.dataset, batch_size=cfg.batch_size, shuffle=True)
         self.eval_dataloader = DataLoader(self.eval_dataset, batch_size=cfg.batch_size, shuffle=False)
@@ -44,7 +44,7 @@ class Trainer(nn.Module):
 
 
         #Why is muon like this? i don't want to anymore
-        '''
+        
         muon_params = []
         adamw_params = [] 
         for name, param in self.model.named_parameters():
@@ -59,7 +59,7 @@ class Trainer(nn.Module):
 
         self.muon_opt = Muon(muon_params, lr=0.02, momentum=0.95)
         self.adamw_opt = AdamW(adamw_params, lr=3e-4, betas=(0.90, 0.95), weight_decay=0.01)
-        '''
+        
 
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H:%M")
@@ -80,12 +80,19 @@ class Trainer(nn.Module):
 
 
                 lr = get_lr(global_step, cfg)
+                '''
                 for param_group in self.optimizer.param_groups: # bzw. adamw_opt / muon_opt
                     param_group['lr'] = lr
+                '''
+                for param_group in self.adamw_opt.param_groups: # bzw. adamw_opt / muon_opt
+                                    param_group['lr'] = lr
 
-                #self.muon_opt.zero_grad()
-                #self.adamw_opt.zero_grad()
-                self.optimizer.zero_grad()
+                for param_group in self.muon_opt.param_groups: # bzw. adamw_opt / muon_opt
+                                    param_group['lr'] = lr
+
+                self.muon_opt.zero_grad()
+                self.adamw_opt.zero_grad()
+                #self.optimizer.zero_grad()
 
                 #print(f"Min tokenid {batch_x.min().item()} max id {batch_x.max().item()}")
                 
@@ -95,16 +102,16 @@ class Trainer(nn.Module):
                 loss = self.criterion(logits.view(-1, self.vocab_size), batch_y.reshape(-1))
 
                 loss.backward()
-                self.optimizer.step()
+                #self.optimizer.step()
 
-                #self.muon_opt.step()
-                #self.adamw_opt.step()
+                self.muon_opt.step()
+                self.adamw_opt.step()
                 global_step += 1
 
             if(epoch +1) % 1 == 0:
                 print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f} {datetime.now().strftime('%H:%M:%S')} at lr: {lr:.3f}")
         
-        print(f"\nFinished Training! at {datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}")
+        print(f"\nFinished Training! at {datetime.now().strftime('%Y-%m-%d_%H:%M:%S')} in {global_step} Steps")
         print("saving...")
         torch.save(self.model.state_dict(), self.checkpoint_path)
         print(f"saved at {self.checkpoint_path}")
