@@ -10,6 +10,23 @@ import statistics
 from config import ModelConfig
 import os
 from datetime import datetime
+import math
+
+
+def get_lr(step, cfg):
+    max_iters = cfg.max_steps
+    warmup_iters = cfg.warmup_steps
+    learning_rate = cfg.max_lr
+    if step < warmup_iters:
+        return learning_rate * (step + 1) / warmup_iters
+
+    if step > max_iters:
+        return cfg.min_lr
+
+    decay_ratio = (step - warmup_iters) / (max_iters - warmup_iters)
+    assert 0 <= decay_ratio <= 1
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+    return cfg.min_lr + coeff * (learning_rate - cfg.min_lr)
 
 class Trainer(nn.Module):
     def __init__(self, cfg):
@@ -26,7 +43,7 @@ class Trainer(nn.Module):
         self.epochs = cfg.epochs
 
 
-        #Muon is a bit more work, but it will come soon
+        #Why is muon like this? i don't want to anymore
         '''
         muon_params = []
         adamw_params = [] 
@@ -55,10 +72,16 @@ class Trainer(nn.Module):
         self.model.train()
 
     def train(self):
+        global_step = 0
         for epoch in range(self.epochs):
             for batch_x, batch_y in self.dataloader:
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
+
+
+                lr = get_lr(global_step, cfg)
+                for param_group in self.optimizer.param_groups: # bzw. adamw_opt / muon_opt
+                    param_group['lr'] = lr
 
                 #self.muon_opt.zero_grad()
                 #self.adamw_opt.zero_grad()
@@ -76,9 +99,10 @@ class Trainer(nn.Module):
 
                 #self.muon_opt.step()
                 #self.adamw_opt.step()
+                global_step += 1
 
             if(epoch +1) % 1 == 0:
-                print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f} {datetime.now().strftime('%H:%M:%S')}")
+                print(f"Epoch {epoch+1:3d}/3 | Loss {loss.item():.4f} {datetime.now().strftime('%H:%M:%S')} at lr: {lr:.3f}")
         
         print(f"\nFinished Training! at {datetime.now().strftime('%Y-%m-%d_%H:%M:%S')}")
         print("saving...")

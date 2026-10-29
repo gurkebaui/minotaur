@@ -9,14 +9,18 @@ class ModelConfig:
     n_layers: int = 6
     max_seq_len: int = 64
     seq_len: int = 64
-    model_name: str = "M:Muon_2:"
+    model_name: str = "Adam"
 
     #Training praram
     batch_size: int = 32
     learning_rate: float = 1e-3
-    max_samples: int = 100000
+    max_samples: int = 10000
     batch_size: int = 32
     epochs: int = 3
+    max_steps: int = 10000
+    warmup_steps: int = 200
+    max_lr: float = 1e-1
+    min_lr: float = 1e-5
 
 
 
