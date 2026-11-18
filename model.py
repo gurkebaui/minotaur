@@ -84,6 +84,7 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         B, T, C = x.shape
         gate = F.silu(self.w_gate(x))
+        gate = gate * self.w_up(x)
         print(gate.shape)
         x_conv = gate[:, :7, :]
         x_r = gate[:, 7:, :]
@@ -104,11 +105,11 @@ class ConvBlock(nn.Module):
         x_conv = x_conv.transpose(0,2)
         print(x_conv.shape)
         print("f")
-        x_gated = gate * self.w_up(x)
+        
         print(x_r.shape)
         x_r = torch.cat([x_r, x_conv], dim=1)
         print(x_r.shape)
-        x_r = self.w_down(x_gated)
+        x_r = self.w_down(x_r)
         print(x_r.shape)
         return x_r
 
