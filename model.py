@@ -73,19 +73,44 @@ class ConvBlock(nn.Module):
         d_model = cfg.d_model
         hidden_dim = int(8 * d_model / 3)
         hidden_dim = ((hidden_dim + 63) // 64) * 64 #auf ein vielfaches von 64 runden
+        self.hidden_dim = hidden_dim
         
         self.w_gate = nn.Linear(d_model, hidden_dim, bias=False)
         self.w_up = nn.Linear(d_model, hidden_dim, bias=False)
         self.w_down = nn.Linear(hidden_dim, d_model, bias=False)
-        self.conv = nn.Conv1d(hidden_dim, hidden_dim, 7)
-        
+        self.conv = nn.Conv1d(4, hidden_dim, 7)
+        self.l = nn.Linear(96,7)
 
     def forward(self, x):
+        B, T, C = x.shape
         gate = F.silu(self.w_gate(x))
-        gate = self.conv(gate)
+        print(gate.shape)
+        x_conv = gate[:, :7, :]
+        x_r = gate[:, 7:, :]
+        print(x_r.shape)
+        print(x_conv.shape)
+        x_conv = x_conv.transpose(0,2)
+        x_conv = x_conv.transpose(1,2)
+        print(x_conv.shape)
+        x_conv = self.conv(x_conv)
+        print(x_conv.shape)
+        x_conv = x_conv.view(self.hidden_dim, B, 96)
+        print("f")
+        print(x_conv.shape)
+        x_conv = self.l(x_conv)
+        print(x_conv.shape)
+        x_conv = x_conv.transpose(1,2)
+        print(x_conv.shape)
+        x_conv = x_conv.transpose(0,2)
+        print(x_conv.shape)
+        print("f")
         x_gated = gate * self.w_up(x)
-
-        return self.w_down(x_gated)
+        print(x_r.shape)
+        x_r = torch.cat([x_r, x_conv], dim=1)
+        print(x_r.shape)
+        x_r = self.w_down(x_gated)
+        print(x_r.shape)
+        return x_r
 
 
 class SwiGLU_FFN(nn.Module):
@@ -129,6 +154,7 @@ class Transformer(nn.Module):
         #self.pos_emb = nn.Embedding(cfg.max_seq_len, cfg.d_model) #depreciated
 
         self.blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
+        self.convB = ConvBlock(cfg)
         self.ln_f = RMSNorm(cfg)
 
         self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
@@ -145,7 +171,7 @@ class Transformer(nn.Module):
         for block in self.blocks:
             h = block(h)
 
-            
+        h = self.convB(h)  
         h = self.ln_f(h)
 
         logits = self.lm_head(h)
@@ -170,7 +196,9 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     cfg = ModelConfig()
     t = Transformer(cfg).to(device)
+    
     x = torch.randint(0,128, (4, 16), device=device)
     y = t(x)
+    
     print("Input shape: ", x.shape)
     print("output shape: ", y.shape)
