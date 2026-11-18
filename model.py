@@ -68,51 +68,25 @@ class CSA(nn.Module):
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, cfg):
+   
+    def __init__(self, cfg, kernel_size=7):
         super().__init__()
-        d_model = cfg.d_model
-        hidden_dim = int(8 * d_model / 3)
-        hidden_dim = ((hidden_dim + 63) // 64) * 64 #auf ein vielfaches von 64 runden
-        self.hidden_dim = hidden_dim
+        d = cfg.d_model
+        self.kernel_size = kernel_size
+        self.in_proj = nn.Linear(d, 3 * d, bias=False)
         
-        self.w_gate = nn.Linear(d_model, hidden_dim, bias=False)
-        self.w_up = nn.Linear(d_model, hidden_dim, bias=False)
-        self.w_down = nn.Linear(hidden_dim, d_model, bias=False)
-        self.conv = nn.Conv1d(4, hidden_dim, 7)
-        self.l = nn.Linear(96,7)
+        
+        self.conv = nn.Conv1d(d, d, kernel_size, groups=d, bias=False, padding=kernel_size - 1)
+        self.out_proj = nn.Linear(d, d, bias=False)
 
     def forward(self, x):
         B, T, C = x.shape
-        gate = F.silu(self.w_gate(x))
-        gate = gate * self.w_up(x)
-        print(gate.shape)
-        x_conv = gate[:, :7, :]
-        x_r = gate[:, 7:, :]
-        print(x_r.shape)
-        print(x_conv.shape)
-        x_conv = x_conv.transpose(0,2)
-        x_conv = x_conv.transpose(1,2)
-        print(x_conv.shape)
-        x_conv = self.conv(x_conv)
-        print(x_conv.shape)
-        x_conv = x_conv.view(self.hidden_dim, B, 96)
-        print("f")
-        print(x_conv.shape)
-        x_conv = self.l(x_conv)
-        print(x_conv.shape)
-        x_conv = x_conv.transpose(1,2)
-        print(x_conv.shape)
-        x_conv = x_conv.transpose(0,2)
-        print(x_conv.shape)
-        print("f")
-        
-        print(x_r.shape)
-        x_r = torch.cat([x_r, x_conv], dim=1)
-        print(x_r.shape)
-        x_r = self.w_down(x_r)
-        print(x_r.shape)
-        return x_r
-
+        b, c, v = self.in_proj(x).chunk(3, dim=-1)   # drei Ströme
+        h = b * v                                    # erstes Gate
+        h = h.transpose(1, 2)                        # (B, C, T)
+        h = self.conv(h)[..., :T]                    # kausale Faltung
+        y = c * h.transpose(1, 2)                    # zweites Gate
+        return self.out_proj(y)                      # (B, T, C)
 
 class SwiGLU_FFN(nn.Module):
     def __init__(self, d_model):
