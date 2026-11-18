@@ -43,7 +43,7 @@ class CSA(nn.Module):
         self.register_buffer("sin", sin, persistent=False)
 
     def forward(self, x):
-        B, T, C = x.shape #what are btc here? they in torch?
+        B, T, C = x.shape #Batch, Time, C
 
         #nfu
         q = self.q_proj(x).view(B, T, self.n_heads, self.d_k).transpose(1,2)
@@ -65,6 +65,15 @@ class CSA(nn.Module):
 
         out = out.transpose(1, 2).contiguous().view(B, T, C)
         return self.out_proj(out)
+
+
+class ConvAttn(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.Conv = nn.Conv2d(32, 32, 7)
+        pass
+
+
 
 
 class SwiGLU_FFN(nn.Module):
