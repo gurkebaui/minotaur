@@ -50,7 +50,7 @@ class Generator:
     print("prepping model")
     self.device = "cuda" if torch.cuda.is_available() else "cpu"
     self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
-
+    print(f"checkpoint:{checkpoint_path}")
     self.d_model = cfg.d_model
     self.max_seq_len = cfg.max_seq_len
     self.max_new_tokens = max_new_tokens
@@ -106,5 +106,5 @@ class Generator:
 
 if __name__ == "__main__":
   cfg = ModelConfig()
-  g = Generator(cfg, checkpoint_path="checkpoints/ludcy_small_2026-11-23_16-12.pth")
+  g = Generator(cfg, checkpoint_path="checkpoints/ludcy_small_2026-11-23_16-21.pth")
   g.generate(prompt="Once upon a time", max_new_tokens=50)
