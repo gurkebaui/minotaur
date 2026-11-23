@@ -78,4 +78,5 @@ if __name__ == "__main__":
     cfg = ModelConfig()
     g = Generator(cfg)
     g.generate(prompt="Once upon a time", max_new_tokens=50)
+
     
