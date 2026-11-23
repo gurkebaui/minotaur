@@ -9,7 +9,7 @@ class ModelConfig:
     n_layers: int = 6
     max_seq_len: int = 64
     seq_len: int = 64
-    model_name: str = "Adam"
+    model_name: str = "ludcy_small"
 
     #Training praram
     batch_size: int = 32
