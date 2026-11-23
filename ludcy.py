@@ -80,32 +80,33 @@ class SwiGLU_FFN1(nn.Module):
 
 
 class SwiGLU_FFN(nn.Module):
-  """Dynamic SwiGLU where w_up is updated by vector u per batch item."""
+    def __init__(self, d_model):
+        super().__init__()
+        hidden_dim = int(8 * d_model / 3)
+        hidden_dim = ((hidden_dim + 63) // 64) * 64
 
-  def __init__(self, d_model):
-    super().__init__()
-    hidden_dim = int(8 * d_model / 3)
-    hidden_dim = ((hidden_dim + 63) // 64) * 64
+        self.u_gate = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_gate = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_up = nn.Linear(d_model, hidden_dim, bias=False)
+        self.w_down = nn.Linear(hidden_dim, d_model, bias=False)
 
-    self.u_gate = nn.Linear(d_model, hidden_dim, bias=False)
-    self.w_gate = nn.Linear(d_model, hidden_dim, bias=False)
-    self.w_up = nn.Linear(d_model, hidden_dim, bias=False)
-    self.w_down = nn.Linear(hidden_dim, d_model, bias=False)
+    def forward(self, x, u):
+        B, T, C = x.shape
 
-  def forward(self, x, u):
-    # u has shape (B, T, d_model) -> pool over T to get a batch update vector (B, d_model)
-    u_vec = u.mean(dim=1)  # (B, d_model)
-    u_proj = F.silu(self.u_gate(u_vec))  # (B, hidden_dim)
+        # Causal cumulative mean: token t only sees u from 0..t (no future leakage)
+        counts = torch.arange(1, T + 1, device=u.device, dtype=u.dtype).view(1, T, 1)
+        u_causal = torch.cumsum(u, dim=1) / counts  # Shape: (B, T, d_model)
 
-    # Batched outer product: (B, hidden_dim, d_model)
-    delta_w = torch.einsum("bh,bd->bhd", u_proj, u_vec)
-    effective_w = self.w_up.weight.unsqueeze(0) - delta_w
+        u_proj = F.silu(self.u_gate(u_causal))      # Shape: (B, T, hidden_dim)
 
-    # Apply per-batch weight matrix: x is (B, T, d_model), effective_w.transpose is (B, d_model, hidden_dim)
-    up = torch.bmm(x, effective_w.transpose(1, 2))
-    gate = F.silu(self.w_gate(x))
+        # Per-token rank-1 update applied efficiently without materializing (B, T, H, D):
+        # (W_up - outer(u_proj, u_causal)) @ x  ==  W_up(x) - u_proj * dot(u_causal, x)
+        dot_ux = (u_causal * x).sum(dim=-1, keepdim=True)  # Shape: (B, T, 1)
+        up = self.w_up(x) - (u_proj * dot_ux)              # Shape: (B, T, hidden_dim)
 
-    return self.w_down(gate * up)
+        gate = F.silu(self.w_gate(x))
+        return self.w_down(gate * up)
+
 
 
 class RMSNorm(nn.Module):
