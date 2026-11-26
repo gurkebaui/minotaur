@@ -3,30 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from dataclasses import dataclass
-
-from .diffusion import get_block_sigmas, sample_sigma_for_block, edm_preconditioning, build_training_mask, get_inference_sigmas, get_block_index, edm_loss_weight
-from .modules import DiffusionBlock, RMSNorm, compute_rope_freqs, TimestepEmbedder, modulate
-
-@dataclass
-class ARConfig:
-    vocab_size: int
-    dim: int
-    num_heads: int
-    mlp_dim: int
-    num_layers: int
-    num_blocks: int
-    max_seq_len: int
-    dropout: float
-    sigma_min: float = 0.02
-    sigma_max: float = 800.0
-    sigma_data: float = 1.0
-    gamma: float = 0.0  # Denoising-Koeffizient (normalerweise 0 für deterministisches Sampling)
-    p_mean: float = 2.0  # Mittelwert der Log-Sigma-Verteilung für Sampling
-    p_std: float = 1.0  # Standardabweichung der Log-Sigma-Verteilung für Sampling
-    
-    def __post_init__(self) -> None:
-        if self.num_layers % self.num_blocks != 0:
-            raise ValueError("num_layers muss durch num_blocks teilbar sein.")
+from config import ARConfig
+from diffusion import get_block_sigmas, sample_sigma_for_block, edm_preconditioning, build_training_mask, get_inference_sigmas, get_block_index, edm_loss_weight
+from modules import DiffusionBlock, RMSNorm, compute_rope_freqs, TimestepEmbedder, modulate
 
 
 class ARDiffusionBlocksModel(nn.Module):
