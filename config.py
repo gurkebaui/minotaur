@@ -78,9 +78,6 @@ class ARConfig:
             self.mlp_dim = ((raw + 31) // 32) * 32
 
 
-def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
-    """AdaLN-Modulation: x * (1 + scale) + shift, gebroadcastet über die Sequenzlänge."""
-    return x * (1.0 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
     
 
