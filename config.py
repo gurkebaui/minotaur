@@ -43,5 +43,44 @@ class DiTConfig:
     num_samples: int = 4
     inference_steps: int = 50
     
+
+@dataclass
+class ARConfig:
+    """Konfiguration für den Autoregressiven DiffusionBlocks-Transformer."""
+
+    vocab_size: int = 256
+    max_seq_len: int = 256
+    dim: int = 256
+    num_heads: int = 4
+    num_layers: int = 12
+    num_blocks: int = 4
+    mlp_dim: int | None = None
+    dropout: float = 0.0
+    sigma_min: float = 0.002
+    sigma_max: float = 80.0
+    sigma_data: float = 0.5
+    p_mean: float = -1.2
+    p_std: float = 1.2
+    gamma: float = 0.1
+
+    def __post_init__(self) -> None:
+        if self.num_layers % self.num_blocks != 0:
+            raise ValueError(
+                f"num_layers ({self.num_layers}) muss durch num_blocks ({self.num_blocks}) teilbar sein."
+            )
+        if self.dim % self.num_heads != 0:
+            raise ValueError(
+                f"dim ({self.dim}) muss durch num_heads ({self.num_heads}) teilbar sein."
+            )
+        if self.mlp_dim is None:
+            # Standard-SwiGLU-Größe (~8/3 * dim), auf Vielfaches von 32 gerundet
+            raw = int(self.dim * 8 / 3)
+            self.mlp_dim = ((raw + 31) // 32) * 32
+
+
+def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+    """AdaLN-Modulation: x * (1 + scale) + shift, gebroadcastet über die Sequenzlänge."""
+    return x * (1.0 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
     
 
