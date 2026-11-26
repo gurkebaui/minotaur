@@ -1,10 +1,17 @@
+import sys
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from config import DiTConfig
 import torch.optim as optim
-from DiT import DiT
-from sheduler import EulerScheduler
+from DiT.DiT import DiT
+from DiT.sheduler import EulerScheduler
 
 def train_loop():
     device = "cuda" if torch.cuda.is_available() else "cpu"

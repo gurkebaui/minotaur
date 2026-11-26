@@ -1,11 +1,28 @@
+import math
+import random
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-from dataclasses import dataclass
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 from config import ARConfig
-from diffusion import get_block_sigmas, sample_sigma_for_block, edm_preconditioning, build_training_mask, get_inference_sigmas, get_block_index, edm_loss_weight
-from modules import DiffusionBlock, RMSNorm, compute_rope_freqs, TimestepEmbedder, modulate
+from DiffusionBlocks.noise_schedule import (
+    edm_loss_weight,
+    edm_preconditioning,
+    get_block_index,
+    get_block_sigmas,
+    get_inference_sigmas,
+    sample_sigma_for_block,
+)
+from DiffusionBlocks.Dif_trans import DiffusionBlock, RMSNorm, build_training_mask, modulate
+from DiffusionBlocks.Dif_tse import TimestepEmbedder, compute_rope_freqs
 
 
 class ARDiffusionBlocksModel(nn.Module):

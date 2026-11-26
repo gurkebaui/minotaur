@@ -1,4 +1,11 @@
 import math
+import sys
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

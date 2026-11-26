@@ -1,5 +1,12 @@
+import sys
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 from config import ModelConfig
-from ludcy import Transformer
+from Transformer.ludcy import Transformer
 import torch
 import torch.nn.functional as F
 from transformers import AutoTokenizer

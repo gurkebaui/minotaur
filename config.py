@@ -15,7 +15,6 @@ class ModelConfig:
     batch_size: int = 32
     learning_rate: float = 1e-3
     max_samples: int = 10000
-    batch_size: int = 32
     epochs: int = 3
     max_steps: int = 10000
     warmup_steps: int = 200

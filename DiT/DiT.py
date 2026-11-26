@@ -1,4 +1,10 @@
+from pathlib import Path
+import sys
 from typing import Any
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
 
 import torch
 import torch.nn as nn

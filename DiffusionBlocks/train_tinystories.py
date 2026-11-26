@@ -13,14 +13,21 @@ from dataclasses import asdict
 import itertools
 import math
 import os
+import sys
 import time
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
 
 from datasets import load_dataset
 import numpy as np
 from tokenizers import Tokenizer, decoders, models, pre_tokenizers, trainers
 import torch
 
-from ar_transformer import ARConfig, ARDiffusionBlocksModel
+from config import ARConfig
+from DiffusionBlocks.Dif_ar import ARDiffusionBlocksModel
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

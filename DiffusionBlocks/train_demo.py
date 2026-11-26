@@ -8,10 +8,17 @@ Ausführen:
 """
 
 import argparse
+import sys
+from pathlib import Path
 import torch
 
-from ar_transformer import ARConfig, ARDiffusionBlocksModel
-from noise_schedule import get_block_index, get_inference_sigmas
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
+from config import ARConfig
+from DiffusionBlocks.Dif_ar import ARDiffusionBlocksModel
+from DiffusionBlocks.noise_schedule import get_block_index, get_inference_sigmas
 
 
 DEMO_TEXT = (

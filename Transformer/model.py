@@ -1,15 +1,21 @@
+import sys
+from pathlib import Path
 from typing import Any
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 import torch.nn.functional as F
 import torch
 import torch.nn as nn
 import math
-from data import CustomDataset
 from config import ModelConfig 
 
 
 
 def precompute_rope_freqs(d_k, max_seq_len, device):
-    inv_freq = 1.0 / (10000 ** torch.arange(0, d_k, 2, dtype=torch.float32, device="cpu") / d_k)
+    inv_freq = 1.0 / (10000 ** (torch.arange(0, d_k, 2, dtype=torch.float32, device=device) / d_k))
     t = torch.arange(max_seq_len, dtype=torch.float32, device=device)
     freqs = torch.outer(t, inv_freq)
 
@@ -21,7 +27,7 @@ def apply_rotary_emb(x, cos, sin):
     cos = cos[:T, :].unsqueeze(0).unsqueeze(1)
     sin = sin[:T, :].unsqueeze(0).unsqueeze(1)
 
-    x_rot = torch.cat((-x[..., x.shape[-1]//-2:], x[..., :x.shape[-1]//2]), dim=-1)
+    x_rot = torch.cat((-x[..., x.shape[-1]//2:], x[..., :x.shape[-1]//2]), dim=-1)
     return (x * cos) + (x_rot * sin)
 
 

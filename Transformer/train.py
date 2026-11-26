@@ -1,8 +1,15 @@
+import sys
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 import torch
 import torch.nn as nn
 from torch.optim import Muon, AdamW
 import torch.optim as optim
-from model import Transformer
+from Transformer.model import Transformer
 from data import CustomDataset
 from eval_data import EvalDataset
 from torch.utils.data import Dataset, DataLoader
@@ -31,6 +38,7 @@ def get_lr(step, cfg):
 class Trainer(nn.Module):
     def __init__(self, cfg):
         super().__init__()
+        self.cfg = cfg
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.eval_dataset = EvalDataset(cfg)
         self.dataset = CustomDataset(cfg)
@@ -50,7 +58,7 @@ class Trainer(nn.Module):
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
                 continue
-            is_embed_or_head = any(x in name for x in ['wte', 'wpe', 'embed', 'classifier', 'output'])
+            is_embed_or_head = any(x in name for x in ['tok_emb', 'lm_head', 'wte', 'wpe', 'embed', 'classifier', 'output'])
 
             if param.ndim == 2 and not is_embed_or_head:
                 muon_params.append(param)
@@ -79,7 +87,7 @@ class Trainer(nn.Module):
                 batch_y = batch_y.to(self.device)
 
 
-                lr = get_lr(global_step, cfg)
+                lr = get_lr(global_step, self.cfg)
                 '''
                 for param_group in self.optimizer.param_groups: # bzw. adamw_opt / muon_opt
                     param_group['lr'] = lr

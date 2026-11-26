@@ -2,10 +2,17 @@ from datetime import datetime
 import math
 import os
 import statistics
+import sys
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
 from config import ModelConfig
 from data import CustomDataset
 from eval_data import EvalDataset
-from ludcy import Transformer
+from Transformer.ludcy import Transformer
 import torch
 import torch.nn as nn
 from torch.optim import AdamW, Muon

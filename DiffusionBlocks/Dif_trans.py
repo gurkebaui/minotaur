@@ -1,19 +1,16 @@
 import math
+import sys
+from pathlib import Path
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from typing import Literal
-from diffusion_utils import (
-    build_training_mask,
-    get_block_index,
-    sample_sigma_for_block,
-    get_block_sigmas,
-    get_inference_sigmas,
-    edm_preconditioning,
-    edm_loss_weight,
-    apply_rope,
-    modulate,
-)
+
+_ROOT = str(Path(__file__).resolve().parent.parent)
+if not sys.path or sys.path[0] != _ROOT:
+    sys.path.insert(0, _ROOT)
+
+from DiffusionBlocks.Dif_tse import apply_rope
 
 
 
