@@ -79,22 +79,22 @@ class ARConfig:
     """Konfiguration für den Autoregressiven DiffusionBlocks-Transformer."""
 
     # Architektur & Embeddings
-    vocab_size: int = 256
-    max_seq_len: int = 256
-    dim: int = 256
-    num_heads: int = 4
-    num_layers: int = 12
+    vocab_size: int = 50257
+    max_seq_len: int = 64
+    dim: int = 128
+    num_heads: int = 8
+    num_layers: int = 6
     num_blocks: int = 4
     mlp_dim: int | None = None
     dropout: float = 0.0
-    freq_dim: int = 256
+    freq_dim: int = 128
     max_period: float = 10000.0
     rope_base: float = 10000.0
     rms_norm_eps: float = 1e-6
     init_std: float = 0.02
 
     # Latent MoE
-    num_experts: int = 8
+    num_experts: int = 16
     top_k: int = 2
     moe_latent_dim: int | None = None
     moe_expert_dim: int | None = None

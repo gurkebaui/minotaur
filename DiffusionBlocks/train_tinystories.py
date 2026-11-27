@@ -10,6 +10,7 @@ Ausführen:
 import argparse
 from contextlib import nullcontext
 from dataclasses import asdict
+from datetime import datetime
 import itertools
 import math
 import os
@@ -32,7 +33,11 @@ from DiffusionBlocks.Dif_ar import ARDiffusionBlocksModel
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DATA_DIR = os.path.join(BASE_DIR, "tinystories_data_gpt2")
-DEFAULT_CKPT_PATH = os.path.join(BASE_DIR, "checkpoints", "tinystories_dblocks_gpt2.pt")
+
+
+def default_ckpt_path(name: str = "tinystories_dblocks_gpt2") -> str:
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    return os.path.join(BASE_DIR, "checkpoints", f"{name}_{ts}.pt")
 
 
 def prepare_tinystories_data(
@@ -281,9 +286,10 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
     else:
         print(f"\nTraining fertig in {total_time:.1f}s")
 
-    os.makedirs(os.path.dirname(args.ckpt_path), exist_ok=True)
-    torch.save({"model_state": model.state_dict(), "config": asdict(cfg)}, args.ckpt_path)
-    print(f"Checkpoint gespeichert: {args.ckpt_path}")
+    ckpt_path = args.ckpt_path or default_ckpt_path()
+    os.makedirs(os.path.dirname(ckpt_path), exist_ok=True)
+    torch.save({"model_state": model.state_dict(), "config": asdict(cfg)}, ckpt_path)
+    print(f"Checkpoint gespeichert: {ckpt_path}")
 
     prompts = [
         ("Once upon a time, there was a little ", 0.0),
@@ -307,6 +313,8 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
 
 def generate_from_checkpoint(args: argparse.Namespace, device: torch.device) -> None:
     """Lädt einen gespeicherten Checkpoint und generiert Text zu `args.prompt`."""
+    if not args.ckpt_path:
+        raise ValueError("Für --generate-only muss --ckpt-path angegeben werden.")
     ckpt = torch.load(args.ckpt_path, map_location=device, weights_only=True)
     cfg = ARConfig(**ckpt["config"])
     tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_name)
@@ -341,7 +349,7 @@ def main() -> None:
     parser.add_argument("--num-stories", type=int, default=defaults.num_train_stories, help="Anzahl Trainings-Stories")
     parser.add_argument("--tokenizer", type=str, default=defaults.tokenizer_name, help="HuggingFace Tokenizer-Name (z. B. gpt2)")
     parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR)
-    parser.add_argument("--ckpt-path", type=str, default=DEFAULT_CKPT_PATH)
+    parser.add_argument("--ckpt-path", type=str, default=None, help="Checkpoint-Pfad (Default: mit Datum & Uhrzeit)")
     parser.add_argument("--generate-only", action="store_true", help="Nur Checkpoint laden & generieren")
     parser.add_argument("--prompt", type=str, default="Once upon a time, there was a little ")
     parser.add_argument("--temperature", type=float, default=defaults.temperature)
