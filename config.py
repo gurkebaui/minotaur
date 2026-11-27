@@ -162,3 +162,38 @@ class ARConfig:
             self.moe_shared_dim = self.moe_expert_dim
         if self.inference_steps is None:
             self.inference_steps = self.num_blocks
+
+
+@dataclass
+class KittenConfig(ModelConfig):
+    """Konfiguration für Kitten-GIGA (Autoregressiver Looped Latent-MoE Transformer)."""
+
+    model_name: str = "kitten_giga"
+
+    # Middle-Loop (Prelude -> Core x num_loops -> Coda)
+    prelude_layers: int = 1
+    core_layers: int = 3
+    coda_layers: int = 1
+    num_loops: int = 2
+    max_loops: int = 8
+
+    # Latent MoE im Core
+    num_experts: int = 8
+    top_k: int = 2
+    moe_latent_dim: int | None = None
+    moe_expert_dim: int | None = None
+    moe_shared_dim: int | None = None
+    moe_aux_loss_coef: float = 0.01
+
+    def __post_init__(self) -> None:
+        if not (1 <= self.top_k <= self.num_experts):
+            raise ValueError(
+                f"top_k ({self.top_k}) muss zwischen 1 und num_experts ({self.num_experts}) liegen."
+            )
+        if self.moe_latent_dim is None:
+            self.moe_latent_dim = max(16, self.d_model // 2)
+        if self.moe_expert_dim is None:
+            raw = int(self.moe_latent_dim * 8 / 3)
+            self.moe_expert_dim = ((raw + 31) // 32) * 32
+        if self.moe_shared_dim is None:
+            self.moe_shared_dim = self.moe_expert_dim

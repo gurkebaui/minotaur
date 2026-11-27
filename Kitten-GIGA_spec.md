@@ -22,3 +22,9 @@ target: beat lfm2.5 750M base
 
 1.part .
 result: diffusion Blocks is way worse than baseline transformer. will not make it into final architecture as is.
+
+new ways:
+[ ] conv blocks for looping
+[ ] hybrid attention
+[ ] research results S ranks
+[ ] research results A ranks
