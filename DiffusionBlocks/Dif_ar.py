@@ -21,7 +21,7 @@ from DiffusionBlocks.noise_schedule import (
     get_inference_sigmas,
     sample_sigma_for_block,
 )
-from DiffusionBlocks.Dif_trans import DiffusionBlock, RMSNorm, build_training_mask, modulate
+from DiffusionBlocks.Dif_trans import DiffusionBlock, LatentMoE, RMSNorm, build_training_mask, modulate
 from DiffusionBlocks.Dif_tse import TimestepEmbedder, compute_rope_freqs
 
 
@@ -50,9 +50,13 @@ class ARDiffusionBlocksModel(nn.Module):
                     layers_per_block,
                     config.dim,
                     config.num_heads,
-                    config.mlp_dim,
+                    config.moe_expert_dim,
                     config.dropout,
                     rms_norm_eps=config.rms_norm_eps,
+                    latent_dim=config.moe_latent_dim,
+                    num_experts=config.num_experts,
+                    top_k=config.top_k,
+                    shared_dim=config.moe_shared_dim,
                 )
                 for _ in range(config.num_blocks)
             ]
@@ -86,6 +90,10 @@ class ARDiffusionBlocksModel(nn.Module):
                 nn.init.normal_(module.weight, std=init_std)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
+            elif isinstance(module, LatentMoE):
+                nn.init.normal_(module.w1, std=init_std)
+                nn.init.normal_(module.w3, std=init_std)
+                nn.init.normal_(module.w2, std=init_std)
 
         # AdaLN-Zero: Modulations- und Output-Layer mit Null initialisieren (stabiler Start)
         for block in self.blocks:
@@ -185,9 +193,21 @@ class ARDiffusionBlocksModel(nn.Module):
         w = edm_loss_weight(sigma, self.config.sigma_data)[:, None]
         loss = (ce * w).mean()
 
+        aux_losses = [
+            layer.mlp.aux_loss
+            for layer in self.blocks[block_idx].layers
+            if getattr(layer.mlp, "aux_loss", None) is not None
+        ]
+        if aux_losses and self.config.moe_aux_loss_coef > 0:
+            aux_loss = torch.stack(aux_losses).mean()
+            loss = loss + self.config.moe_aux_loss_coef * aux_loss
+        else:
+            aux_loss = torch.zeros((), device=tokens.device)
+
         return loss, {
             "loss": float(loss.item()),
             "ce_loss": float(ce.mean().item()),
+            "aux_loss": float(aux_loss.item()),
             "block_idx": block_idx,
         }
 

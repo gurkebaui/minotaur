@@ -93,6 +93,14 @@ class ARConfig:
     rms_norm_eps: float = 1e-6
     init_std: float = 0.02
 
+    # Latent MoE
+    num_experts: int = 8
+    top_k: int = 2
+    moe_latent_dim: int | None = None
+    moe_expert_dim: int | None = None
+    moe_shared_dim: int | None = None
+    moe_aux_loss_coef: float = 0.01
+
     # Noise-Schedule & EDM
     sigma_min: float = 0.002
     sigma_max: float = 80.0
@@ -140,5 +148,16 @@ class ARConfig:
             # Standard-SwiGLU-Größe (~8/3 * dim), auf Vielfaches von 32 gerundet
             raw = int(self.dim * 8 / 3)
             self.mlp_dim = ((raw + 31) // 32) * 32
+        if not (1 <= self.top_k <= self.num_experts):
+            raise ValueError(
+                f"top_k ({self.top_k}) muss zwischen 1 und num_experts ({self.num_experts}) liegen."
+            )
+        if self.moe_latent_dim is None:
+            self.moe_latent_dim = max(16, self.dim // 2)
+        if self.moe_expert_dim is None:
+            raw_exp = int(self.moe_latent_dim * 8 / 3)
+            self.moe_expert_dim = ((raw_exp + 31) // 32) * 32
+        if self.moe_shared_dim is None:
+            self.moe_shared_dim = self.moe_expert_dim
         if self.inference_steps is None:
             self.inference_steps = self.num_blocks

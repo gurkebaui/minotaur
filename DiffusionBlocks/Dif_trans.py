@@ -47,6 +47,69 @@ class SwiGLU(nn.Module):
         return self.dropout(self.w2(F.silu(self.w1(x)) * self.w3(x)))
 
 
+class LatentMoE(nn.Module):
+    """Latent Mixture-of-Experts: Router in dim, Top-K SwiGLU-Experten in latent_dim + Shared Expert."""
+
+    def __init__(
+        self,
+        dim: int,
+        latent_dim: int,
+        expert_dim: int,
+        num_experts: int = 8,
+        top_k: int = 2,
+        shared_dim: int | None = None,
+        dropout: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.num_experts = num_experts
+        self.top_k = min(top_k, num_experts)
+
+        self.router = nn.Linear(dim, num_experts, bias=False)
+        self.down_proj = nn.Linear(dim, latent_dim, bias=False)
+        self.up_proj = nn.Linear(latent_dim, dim, bias=False)
+
+        self.w1 = nn.Parameter(torch.randn(num_experts, latent_dim, expert_dim) * 0.02)
+        self.w3 = nn.Parameter(torch.randn(num_experts, latent_dim, expert_dim) * 0.02)
+        self.w2 = nn.Parameter(torch.randn(num_experts, expert_dim, latent_dim) * 0.02)
+
+        self.shared_expert = SwiGLU(dim, shared_dim or expert_dim, dropout)
+        self.dropout = nn.Dropout(dropout)
+        self.aux_loss: torch.Tensor | None = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        bsz, seq_len, _ = x.shape
+        router_probs = F.softmax(self.router(x), dim=-1)
+        topk_vals, topk_idx = torch.topk(router_probs, self.top_k, dim=-1)
+        topk_weights = topk_vals / topk_vals.sum(dim=-1, keepdim=True)
+
+        if self.training:
+            one_hot = F.one_hot(topk_idx, self.num_experts).float().mean(dim=-2)
+            f = one_hot.mean(dim=(0, 1))
+            p = router_probs.mean(dim=(0, 1))
+            self.aux_loss = self.num_experts * (f * p).sum()
+        else:
+            self.aux_loss = None
+
+        z_flat = self.down_proj(x).reshape(-1, self.latent_dim)
+        topk_idx_flat = topk_idx.reshape(-1, self.top_k)
+        topk_w_flat = topk_weights.reshape(-1, self.top_k)
+
+        out_latent = torch.zeros_like(z_flat)
+        for e in range(self.num_experts):
+            tok_idx, k_pos = torch.where(topk_idx_flat == e)
+            if tok_idx.numel() == 0:
+                continue
+            z_e = z_flat[tok_idx]
+            h_e = F.silu(z_e @ self.w1[e]) * (z_e @ self.w3[e])
+            y_e = h_e @ self.w2[e]
+            w_e = topk_w_flat[tok_idx, k_pos].unsqueeze(-1).to(y_e.dtype)
+            out_latent.index_add_(0, tok_idx, (y_e * w_e).to(out_latent.dtype))
+
+        out = self.up_proj(out_latent.view(bsz, seq_len, self.latent_dim))
+        return self.dropout(out) + self.shared_expert(x)
+
+
 class CausalSelfAttention(nn.Module):
     """Multi-Head Self-Attention mit RoPE und flexibler Kausal- oder Trainings-Maske."""
 
@@ -102,12 +165,24 @@ class DiTTransformerLayer(nn.Module):
         mlp_dim: int,
         dropout: float = 0.0,
         rms_norm_eps: float = 1e-6,
+        latent_dim: int | None = None,
+        num_experts: int = 8,
+        top_k: int = 2,
+        shared_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.norm1 = RMSNorm(dim, eps=rms_norm_eps)
         self.attn = CausalSelfAttention(dim, num_heads, dropout)
         self.norm2 = RMSNorm(dim, eps=rms_norm_eps)
-        self.mlp = SwiGLU(dim, mlp_dim, dropout)
+        self.mlp = LatentMoE(
+            dim,
+            latent_dim or max(16, dim // 2),
+            mlp_dim,
+            num_experts=num_experts,
+            top_k=top_k,
+            shared_dim=shared_dim,
+            dropout=dropout,
+        )
         # 6 Parameter für Attention (shift, scale, gate) + MLP (shift, scale, gate)
         self.adaLN = nn.Sequential(nn.SiLU(), nn.Linear(dim, 6 * dim))
 
@@ -141,11 +216,25 @@ class DiffusionBlock(nn.Module):
         mlp_dim: int,
         dropout: float = 0.0,
         rms_norm_eps: float = 1e-6,
+        latent_dim: int | None = None,
+        num_experts: int = 8,
+        top_k: int = 2,
+        shared_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.layers = nn.ModuleList(
             [
-                DiTTransformerLayer(dim, num_heads, mlp_dim, dropout, rms_norm_eps=rms_norm_eps)
+                DiTTransformerLayer(
+                    dim,
+                    num_heads,
+                    mlp_dim,
+                    dropout,
+                    rms_norm_eps=rms_norm_eps,
+                    latent_dim=latent_dim,
+                    num_experts=num_experts,
+                    top_k=top_k,
+                    shared_dim=shared_dim,
+                )
                 for _ in range(num_layers)
             ]
         )
