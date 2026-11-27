@@ -65,8 +65,10 @@ class Trainer(nn.Module):
             else:
                 adamw_params.append(param)
 
-        self.muon_opt = Muon(muon_params, lr=0.02, momentum=0.95)
-        self.adamw_opt = AdamW(adamw_params, lr=3e-4, betas=(0.90, 0.95), weight_decay=0.01)
+        self.muon_opt = Muon(muon_params, lr=cfg.muon_lr, momentum=cfg.muon_momentum)
+        self.adamw_opt = AdamW(
+            adamw_params, lr=cfg.adamw_lr, betas=cfg.adamw_betas, weight_decay=cfg.weight_decay
+        )
         
 
 

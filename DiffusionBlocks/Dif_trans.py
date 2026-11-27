@@ -95,11 +95,18 @@ class DiTTransformerLayer(nn.Module):
     Ein Llama-2-Transformer-Layer, erweitert um DiT AdaLN-Zero für Noise-Conditioning.
     """
 
-    def __init__(self, dim: int, num_heads: int, mlp_dim: int, dropout: float = 0.0) -> None:
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_dim: int,
+        dropout: float = 0.0,
+        rms_norm_eps: float = 1e-6,
+    ) -> None:
         super().__init__()
-        self.norm1 = RMSNorm(dim)
+        self.norm1 = RMSNorm(dim, eps=rms_norm_eps)
         self.attn = CausalSelfAttention(dim, num_heads, dropout)
-        self.norm2 = RMSNorm(dim)
+        self.norm2 = RMSNorm(dim, eps=rms_norm_eps)
         self.mlp = SwiGLU(dim, mlp_dim, dropout)
         # 6 Parameter für Attention (shift, scale, gate) + MLP (shift, scale, gate)
         self.adaLN = nn.Sequential(nn.SiLU(), nn.Linear(dim, 6 * dim))
@@ -127,11 +134,20 @@ class DiffusionBlock(nn.Module):
     """Ein unabhängig trainierbarer Block aus L/B Transformer-Layern."""
 
     def __init__(
-        self, num_layers: int, dim: int, num_heads: int, mlp_dim: int, dropout: float = 0.0
+        self,
+        num_layers: int,
+        dim: int,
+        num_heads: int,
+        mlp_dim: int,
+        dropout: float = 0.0,
+        rms_norm_eps: float = 1e-6,
     ) -> None:
         super().__init__()
         self.layers = nn.ModuleList(
-            [DiTTransformerLayer(dim, num_heads, mlp_dim, dropout) for _ in range(num_layers)]
+            [
+                DiTTransformerLayer(dim, num_heads, mlp_dim, dropout, rms_norm_eps=rms_norm_eps)
+                for _ in range(num_layers)
+            ]
         )
 
     def forward(

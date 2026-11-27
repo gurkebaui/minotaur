@@ -70,11 +70,11 @@ class Trainer:
       else:
         adamw_params.append(param)
 
-    self.muon_base_lr = 0.02
-    self.adamw_base_lr = 3e-4
-    self.muon_opt = Muon(muon_params, lr=self.muon_base_lr, momentum=0.95)
+    self.muon_base_lr = cfg.muon_lr
+    self.adamw_base_lr = cfg.adamw_lr
+    self.muon_opt = Muon(muon_params, lr=self.muon_base_lr, momentum=cfg.muon_momentum)
     self.adamw_opt = AdamW(
-        adamw_params, lr=self.adamw_base_lr, betas=(0.90, 0.95), weight_decay=0.01
+        adamw_params, lr=self.adamw_base_lr, betas=cfg.adamw_betas, weight_decay=cfg.weight_decay
     )
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -113,7 +113,7 @@ class Trainer:
         )
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.grad_clip)
 
         self.muon_opt.step()
         self.adamw_opt.step()

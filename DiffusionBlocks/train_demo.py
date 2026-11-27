@@ -142,37 +142,48 @@ def run_training_demo(steps: int, device: torch.device) -> None:
         num_layers=8,
         num_blocks=4,
         dropout=0.0,
+        batch_size=batch_size,
+        steps=steps,
+        lr=3e-3,
     )
+    torch.manual_seed(cfg.seed)
     model = ARDiffusionBlocksModel(cfg).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-3, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay, betas=cfg.betas
+    )
 
-    print(f"\nStarte Mini-Training ({steps} Schritte, 4 Blöcke, Device={device})...")
+    print(f"\nStarte Mini-Training ({cfg.steps} Schritte, {cfg.num_blocks} Blöcke, Device={device})...")
     block_ce = {b: [] for b in range(cfg.num_blocks)}
 
     model.train()
-    for step in range(1, steps + 1):
-        starts = torch.randint(0, len(encoded) - seq_len - 1, (batch_size,), device=device)
-        batch = torch.stack([encoded[s : s + seq_len + 1] for s in starts])
+    for step in range(1, cfg.steps + 1):
+        starts = torch.randint(0, len(encoded) - cfg.max_seq_len - 1, (cfg.batch_size,), device=device)
+        batch = torch.stack([encoded[s : s + cfg.max_seq_len + 1] for s in starts])
 
         optimizer.zero_grad()
         loss, info = model.training_loss(batch)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
         optimizer.step()
 
         block_ce[info["block_idx"]].append(info["ce_loss"])
 
-        if step % (steps // 4) == 0 or step == steps:
+        if step % (cfg.steps // 4) == 0 or step == cfg.steps:
             summary = " | ".join(
                 f"B{b}: {sum(v)/len(v):.3f}" if v else f"B{b}: -"
                 for b, v in block_ce.items()
             )
-            print(f"Schritt {step:4d}/{steps} | Ø CE-Loss -> {summary}")
+            print(f"Schritt {step:4d}/{cfg.steps} | Ø CE-Loss -> {summary}")
             block_ce = {b: [] for b in range(cfg.num_blocks)}
 
     prompt = "DiffusionBlocks "
     prompt_ids = torch.tensor([tokenizer.encode(prompt)], dtype=torch.long, device=device)
-    generated_ids = model.generate(prompt_ids, max_new_tokens=90, num_steps=4, temperature=0.0)
+    generated_ids = model.generate(
+        prompt_ids,
+        max_new_tokens=90,
+        num_steps=cfg.inference_steps,
+        temperature=cfg.temperature,
+    )
     print("\nGenerierter Text:")
     print(f"  Prompt: '{prompt}'")
     print(f"  Output: '{tokenizer.decode(generated_ids[0].tolist())}'")

@@ -7,9 +7,9 @@ class EvalDataset(Dataset):
     def __init__(self, cfg):
         print("lade datenset")
         super().__init__()
-        dataset = load_dataset("roneneldan/TinyStories", split="validation", streaming=True)
+        dataset = load_dataset(cfg.dataset_name, split="validation", streaming=True)
 
-        self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+        self.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_name)
 
         tokens_list = []
         count = 0

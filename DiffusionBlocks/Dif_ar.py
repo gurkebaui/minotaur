@@ -40,24 +40,31 @@ class ARDiffusionBlocksModel(nn.Module):
         layers_per_block = config.num_layers // config.num_blocks
 
         self.token_emb = nn.Embedding(config.vocab_size, config.dim)
-        self.time_embedder = TimestepEmbedder(config.dim)
+        self.time_embedder = TimestepEmbedder(
+            config.dim, freq_dim=config.freq_dim, max_period=config.max_period
+        )
 
         self.blocks = nn.ModuleList(
             [
                 DiffusionBlock(
-                    layers_per_block, config.dim, config.num_heads, config.mlp_dim, config.dropout
+                    layers_per_block,
+                    config.dim,
+                    config.num_heads,
+                    config.mlp_dim,
+                    config.dropout,
+                    rms_norm_eps=config.rms_norm_eps,
                 )
                 for _ in range(config.num_blocks)
             ]
         )
 
-        self.final_norm = RMSNorm(config.dim)
+        self.final_norm = RMSNorm(config.dim, eps=config.rms_norm_eps)
         self.final_adaLN = nn.Sequential(nn.SiLU(), nn.Linear(config.dim, 2 * config.dim))
         self.lm_head = nn.Linear(config.dim, config.vocab_size, bias=False)
 
         # RoPE bis max_seq_len + 1, da noisy_i bei Position i+1 liegt (bis max_seq_len)
         head_dim = config.dim // config.num_heads
-        cos, sin = compute_rope_freqs(head_dim, config.max_seq_len + 1)
+        cos, sin = compute_rope_freqs(head_dim, config.max_seq_len + 1, base=config.rope_base)
         self.register_buffer("rope_cos", cos, persistent=False)
         self.register_buffer("rope_sin", sin, persistent=False)
 
@@ -72,10 +79,11 @@ class ARDiffusionBlocksModel(nn.Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
-        nn.init.normal_(self.token_emb.weight, std=0.02)
+        init_std = self.config.init_std
+        nn.init.normal_(self.token_emb.weight, std=init_std)
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.normal_(module.weight, std=0.02)
+                nn.init.normal_(module.weight, std=init_std)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
@@ -220,14 +228,16 @@ class ARDiffusionBlocksModel(nn.Module):
         prompt_ids: torch.Tensor,
         max_new_tokens: int,
         num_steps: int | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
     ) -> torch.Tensor:
         """
         Autoregressive Textgenerierung: Für jedes neue Token wird ein `num_steps`-stufiger
         Euler-Denoising-Prozess von sigma_max nach sigma_min durchlaufen.
         """
         if num_steps is None:
-            num_steps = self.config.num_blocks
+            num_steps = self.config.inference_steps or self.config.num_blocks
+        if temperature is None:
+            temperature = self.config.temperature
 
         was_training = self.training
         self.eval()

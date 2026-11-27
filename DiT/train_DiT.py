@@ -19,7 +19,7 @@ def train_loop():
 
     model = DiT(cfg).to(device)
     scheduler = EulerScheduler(cfg)
-    optimizer = optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=0.01)
+    optimizer = optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
     model.train()
 
@@ -28,7 +28,7 @@ def train_loop():
     for step in range(cfg.max_steps):
         optimizer.zero_grad()
 
-        x_0 = torch.randn(4, cfg.in_channels, cfg.H, cfg.W, device=device)
+        x_0 = torch.randn(cfg.batch_size, cfg.in_channels, cfg.H, cfg.W, device=device)
         batch_size = x_0.shape[0]
 
         t_idx = torch.randint(0, scheduler.num_train_timesteps, (batch_size,), device=device)
@@ -45,7 +45,7 @@ def train_loop():
         loss.backward()
         optimizer.step()
 
-        if step % 10 == 0:
+        if step % cfg.log_every == 0:
             print(f"Step {step:3d} | Loss: {loss.item():.6f}")
 
 if __name__ == "__main__":

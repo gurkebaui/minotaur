@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class ModelConfig:
-    #Architektur
+    """Konfiguration für den Standard-/Ludcy-Transformer und dessen Training."""
+
+    # Architektur
     vocab_size: int = 50257
     d_model: int = 128
     n_heads: int = 8
@@ -10,23 +13,43 @@ class ModelConfig:
     max_seq_len: int = 64
     seq_len: int = 64
     model_name: str = "ludcy_small"
+    rope_base: float = 10000.0
+    rms_norm_eps: float = 1e-5
+    conv_kernel_size: int = 7
 
-    #Training praram
+    # Daten & Tokenizer
+    dataset_name: str = "roneneldan/TinyStories"
+    tokenizer_name: str = "gpt2"
+    max_samples: int = 10000
+
+    # Training & Optimizer
     batch_size: int = 32
     learning_rate: float = 1e-3
-    max_samples: int = 10000
     epochs: int = 3
     max_steps: int = 10000
     warmup_steps: int = 200
     max_lr: float = 1e-1
     min_lr: float = 1e-5
+    muon_lr: float = 0.02
+    muon_momentum: float = 0.95
+    adamw_lr: float = 3e-4
+    adamw_betas: tuple[float, float] = (0.90, 0.95)
+    weight_decay: float = 0.01
+    grad_clip: float = 1.0
 
+    # Generierung
+    max_new_tokens: int = 50
+    temperature: float = 0.8
+    top_k: int = 50
+    top_p: float = 0.9
+    checkpoint_path: str = "checkpoints/ludcy_small_2026-11-23_16-21.pth"
 
 
 @dataclass
 class DiTConfig:
-    num_train_timesteps: int = 1000
-    num_steps: int = 20
+    """Konfiguration für den Bild-DiT und den Euler-Scheduler."""
+
+    # Architektur
     d_model: int = 128
     max_period: int = 10000
     patch_size: int = 4
@@ -35,18 +58,27 @@ class DiTConfig:
     H: int = 32
     num_heads: int = 8
     num_layers: int = 3
-    lr: float = 1e-4
-    max_steps: int = 21
+    pos_emb_std: float = 0.02
 
-    #generator
+    # Diffusion & Training
+    num_train_timesteps: int = 1000
+    num_steps: int = 20
+    batch_size: int = 4
+    lr: float = 1e-4
+    weight_decay: float = 0.01
+    max_steps: int = 21
+    log_every: int = 10
+
+    # Generator
     num_samples: int = 4
     inference_steps: int = 50
-    
+
 
 @dataclass
 class ARConfig:
     """Konfiguration für den Autoregressiven DiffusionBlocks-Transformer."""
 
+    # Architektur & Embeddings
     vocab_size: int = 256
     max_seq_len: int = 256
     dim: int = 256
@@ -55,12 +87,45 @@ class ARConfig:
     num_blocks: int = 4
     mlp_dim: int | None = None
     dropout: float = 0.0
+    freq_dim: int = 256
+    max_period: float = 10000.0
+    rope_base: float = 10000.0
+    rms_norm_eps: float = 1e-6
+    init_std: float = 0.02
+
+    # Noise-Schedule & EDM
     sigma_min: float = 0.002
     sigma_max: float = 80.0
     sigma_data: float = 0.5
     p_mean: float = -1.2
     p_std: float = 1.2
     gamma: float = 0.1
+
+    # Training & Optimizer
+    seed: int = 42
+    batch_size: int = 64
+    steps: int = 8000
+    lr: float = 6e-4
+    min_lr_ratio: float = 0.1
+    warmup_ratio: float = 0.05
+    min_warmup_steps: int = 10
+    weight_decay: float = 0.01
+    betas: tuple[float, float] = (0.9, 0.95)
+    grad_clip: float = 1.0
+
+    # Daten & Evaluation
+    dataset_name: str = "roneneldan/TinyStories"
+    num_train_stories: int = 50_000
+    num_val_stories: int = 1_000
+    bpe_vocab_size: int = 4096
+    eval_batches_per_block: int = 8
+    log_every: int | None = None
+    val_every: int | None = None
+
+    # Inferenz / Generierung
+    inference_steps: int | None = None
+    temperature: float = 0.0
+    max_new_tokens: int = 120
 
     def __post_init__(self) -> None:
         if self.num_layers % self.num_blocks != 0:
@@ -75,8 +140,5 @@ class ARConfig:
             # Standard-SwiGLU-Größe (~8/3 * dim), auf Vielfaches von 32 gerundet
             raw = int(self.dim * 8 / 3)
             self.mlp_dim = ((raw + 31) // 32) * 32
-
-
-
-
-
+        if self.inference_steps is None:
+            self.inference_steps = self.num_blocks

@@ -12,9 +12,9 @@ import torch.nn.functional as F
 from config import ModelConfig
 
 
-def precompute_rope_freqs(d_k, max_seq_len, device):
+def precompute_rope_freqs(d_k, max_seq_len, device, base=10000.0):
   inv_freq = 1.0 / (
-      10000 ** (torch.arange(0, d_k, 2, dtype=torch.float32, device=device) / d_k)
+      base ** (torch.arange(0, d_k, 2, dtype=torch.float32, device=device) / d_k)
   )
   t = torch.arange(max_seq_len, dtype=torch.float32, device=device)
   freqs = torch.outer(t, inv_freq)
@@ -43,7 +43,7 @@ class CSA(nn.Module):
     self.v_proj = nn.Linear(cfg.d_model, cfg.d_model)
     self.out_proj = nn.Linear(cfg.d_model, cfg.d_model)
 
-    cos, sin = precompute_rope_freqs(self.d_k, cfg.max_seq_len, device="cpu")
+    cos, sin = precompute_rope_freqs(self.d_k, cfg.max_seq_len, device="cpu", base=cfg.rope_base)
     self.register_buffer("cos", cos, persistent=False)
     self.register_buffer("sin", sin, persistent=False)
 
@@ -118,9 +118,9 @@ class SwiGLU_FFN(nn.Module):
 
 class RMSNorm(nn.Module):
 
-  def __init__(self, cfg, eps=1e-5):
+  def __init__(self, cfg, eps=None):
     super().__init__()
-    self.eps = eps
+    self.eps = cfg.rms_norm_eps if eps is None else eps
     self.weight = nn.Parameter(torch.ones(cfg.d_model))
 
   def forward(self, x):

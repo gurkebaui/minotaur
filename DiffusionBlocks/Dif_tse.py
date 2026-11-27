@@ -7,9 +7,10 @@ from torch import nn
 class TimestepEmbedder(nn.Module):
     """Wandelt das skalare Noise-Level c_noise in einen dim-dimensionalen Vektor um (wie in DiT)."""
 
-    def __init__(self, dim: int, freq_dim: int = 256) -> None:
+    def __init__(self, dim: int, freq_dim: int = 256, max_period: float = 10000.0) -> None:
         super().__init__()
         self.freq_dim = freq_dim
+        self.max_period = max_period
         self.mlp = nn.Sequential(
             nn.Linear(freq_dim, dim),
             nn.SiLU(),
@@ -29,7 +30,9 @@ class TimestepEmbedder(nn.Module):
         return emb
 
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        freq_emb = self.timestep_embedding(t, self.freq_dim).to(self.mlp[0].weight.dtype)
+        freq_emb = self.timestep_embedding(
+            t, self.freq_dim, max_period=self.max_period
+        ).to(self.mlp[0].weight.dtype)
         return self.mlp(freq_emb)
 
 

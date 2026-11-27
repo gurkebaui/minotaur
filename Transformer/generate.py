@@ -39,21 +39,25 @@ def sample_next_token(logits, temperature=0.8, top_k=50, top_p=0.9):
     return next_token
 
 class Generator():
-    def __init__(self, cfg, max_new_tokens=50, checkpoint_path="checkpoints/model_small_2026-11-23_16:14.pth"):
+    def __init__(self, cfg, max_new_tokens=None, checkpoint_path=None):
         print("prepping model")
+        self.cfg = cfg
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
+        self.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_name)
 
         self.d_model = cfg.d_model
         self.max_seq_len = cfg.max_seq_len
+        self.max_new_tokens = cfg.max_new_tokens if max_new_tokens is None else max_new_tokens
         self.vocab_size = len(self.tokenizer)
 
+        ckpt = cfg.checkpoint_path if checkpoint_path is None else checkpoint_path
         self.model = Transformer(cfg)
-        self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
+        self.model.load_state_dict(torch.load(ckpt, map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
     
-    def generate(self, prompt, max_new_tokens):
+    def generate(self, prompt, max_new_tokens=None):
+            max_new_tokens = self.max_new_tokens if max_new_tokens is None else max_new_tokens
             input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
             print(f"\n User: {prompt}")
             print("\n Model: ")
@@ -67,9 +71,9 @@ class Generator():
                     #next_token = torch.argmax(next_token_logits, dim=1, keepdim=True) # depreciated
                     next_token = sample_next_token(
                                                    next_token_logits,
-                                                    temperature=0.8,
-                                                     top_k=50,
-                                                    top_p=0.9)
+                                                    temperature=self.cfg.temperature,
+                                                     top_k=self.cfg.top_k,
+                                                    top_p=self.cfg.top_p)
 
                     input_ids = torch.cat((input_ids, next_token), dim=1)
 

@@ -110,7 +110,7 @@ class PosEmbedding(nn.Module):
         
         num_patches = (cfg.H // cfg.patch_size) * (cfg.W // cfg.patch_size)
         #[B, W*H, d_model] [seq_len]
-        self.pos_emb = nn.Parameter(torch.randn(1, num_patches, cfg.d_model) * 0.02)
+        self.pos_emb = nn.Parameter(torch.randn(1, num_patches, cfg.d_model) * cfg.pos_emb_std)
     def forward(self, x): #x from PatchEmb
         return x + self.pos_emb
 

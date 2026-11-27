@@ -51,21 +51,23 @@ class Generator:
   def __init__(
       self,
       cfg,
-      max_new_tokens=50,
-      checkpoint_path="checkpoints/M:Muon_2:_2026-10-27_18:20.pth",
+      max_new_tokens=None,
+      checkpoint_path=None,
   ):
     print("prepping model")
+    self.cfg = cfg
     self.device = "cuda" if torch.cuda.is_available() else "cpu"
-    self.tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    print(f"checkpoint:{checkpoint_path}")
+    self.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_name)
+    ckpt = cfg.checkpoint_path if checkpoint_path is None else checkpoint_path
+    print(f"checkpoint:{ckpt}")
     self.d_model = cfg.d_model
     self.max_seq_len = cfg.max_seq_len
-    self.max_new_tokens = max_new_tokens
+    self.max_new_tokens = cfg.max_new_tokens if max_new_tokens is None else max_new_tokens
     self.vocab_size = len(self.tokenizer)
 
     self.model = Transformer(cfg).to(self.device)
     state_dict = torch.load(
-        checkpoint_path, map_location=self.device, weights_only=True
+        ckpt, map_location=self.device, weights_only=True
     )
     self.model.load_state_dict(state_dict)
     self.model.eval()
@@ -74,11 +76,14 @@ class Generator:
       self,
       prompt,
       max_new_tokens=None,
-      temperature=0.8,
-      top_k=50,
-      top_p=0.9,
+      temperature=None,
+      top_k=None,
+      top_p=None,
   ):
     max_new_tokens = max_new_tokens or self.max_new_tokens
+    temperature = self.cfg.temperature if temperature is None else temperature
+    top_k = self.cfg.top_k if top_k is None else top_k
+    top_p = self.cfg.top_p if top_p is None else top_p
     input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(
         self.device
     )

@@ -37,6 +37,7 @@ DEFAULT_CKPT_PATH = os.path.join(BASE_DIR, "checkpoints", "tinystories_dblocks.p
 
 def prepare_tinystories_data(
     data_dir: str,
+    dataset_name: str = "roneneldan/TinyStories",
     num_train_stories: int = 50_000,
     num_val_stories: int = 1_000,
     vocab_size: int = 4096,
@@ -57,10 +58,10 @@ def prepare_tinystories_data(
         val_tokens = np.load(val_path, mmap_mode="r")
         return tokenizer, train_tokens, val_tokens
 
-    print(f"Streame {num_train_stories:,} Train- & {num_val_stories:,} Val-Stories von TinyStories ...")
+    print(f"Streame {num_train_stories:,} Train- & {num_val_stories:,} Val-Stories von {dataset_name} ...")
     t0 = time.time()
-    train_ds = load_dataset("roneneldan/TinyStories", split="train", streaming=True)
-    val_ds = load_dataset("roneneldan/TinyStories", split="validation", streaming=True)
+    train_ds = load_dataset(dataset_name, split="train", streaming=True)
+    val_ds = load_dataset(dataset_name, split="validation", streaming=True)
 
     train_texts = [ex["text"] for ex in itertools.islice(train_ds, num_train_stories)]
     val_texts = [ex["text"] for ex in itertools.islice(val_ds, num_val_stories)]
@@ -186,25 +187,30 @@ def generate_story(
 
 def train(args: argparse.Namespace, device: torch.device) -> None:
     """Trainiert das AR-DiffusionBlocks-Modell auf TinyStories und speichert den Checkpoint."""
-    torch.manual_seed(42)
-    np.random.seed(42)
+    cfg = ARConfig(
+        max_seq_len=args.seq_len,
+        dim=args.dim,
+        num_heads=args.num_heads,
+        num_layers=args.num_layers,
+        num_blocks=args.num_blocks,
+        batch_size=args.batch_size,
+        steps=args.steps,
+        lr=args.lr,
+        num_train_stories=args.num_stories,
+        bpe_vocab_size=args.vocab_size,
+    )
+    torch.manual_seed(cfg.seed)
+    np.random.seed(cfg.seed)
 
     tokenizer, train_tokens, val_tokens = prepare_tinystories_data(
         args.data_dir,
-        num_train_stories=args.num_stories,
-        vocab_size=args.vocab_size,
+        dataset_name=cfg.dataset_name,
+        num_train_stories=cfg.num_train_stories,
+        num_val_stories=cfg.num_val_stories,
+        vocab_size=cfg.bpe_vocab_size,
     )
+    cfg.vocab_size = tokenizer.get_vocab_size()
 
-    cfg = ARConfig(
-        vocab_size=tokenizer.get_vocab_size(),
-        max_seq_len=args.seq_len,
-        dim=384,
-        num_heads=6,
-        num_layers=8,
-        num_blocks=4,
-        dropout=0.0,
-        gamma=0.1,
-    )
     model = ARDiffusionBlocksModel(cfg).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     print(
@@ -213,10 +219,10 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
     )
 
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=args.lr, weight_decay=0.01, betas=(0.9, 0.95)
+        model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay, betas=cfg.betas
     )
-    warmup_steps = max(10, int(0.05 * args.steps))
-    min_lr = args.lr * 0.1
+    warmup_steps = max(cfg.min_warmup_steps, int(cfg.warmup_ratio * cfg.steps))
+    min_lr = cfg.lr * cfg.min_lr_ratio
     amp_ctx = (
         torch.amp.autocast("cuda", dtype=torch.bfloat16)
         if device.type == "cuda"
@@ -226,46 +232,59 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
 
-    log_every = max(50, args.steps // 10)
-    val_every = max(100, args.steps // 4)
+    log_every = cfg.log_every or max(50, cfg.steps // 10)
+    val_every = cfg.val_every or max(100, cfg.steps // 4)
     block_ce = {b: [] for b in range(cfg.num_blocks)}
     t_start = time.time()
 
     model.train()
-    for step in range(1, args.steps + 1):
-        lr = get_lr(step - 1, args.steps, warmup_steps, args.lr, min_lr)
+    for step in range(1, cfg.steps + 1):
+        lr = get_lr(step - 1, cfg.steps, warmup_steps, cfg.lr, min_lr)
         for pg in optimizer.param_groups:
             pg["lr"] = lr
 
-        batch = sample_batch(train_tokens, args.batch_size, args.seq_len, device)
+        batch = sample_batch(train_tokens, cfg.batch_size, cfg.max_seq_len, device)
         optimizer.zero_grad(set_to_none=True)
 
         with amp_ctx:
             loss, info = model.training_loss(batch)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
         optimizer.step()
 
         block_ce[info["block_idx"]].append(info["ce_loss"])
 
-        if step % log_every == 0 or step == args.steps:
+        if step % log_every == 0 or step == cfg.steps:
             elapsed = time.time() - t_start
             sps = step / elapsed
             train_str = " | ".join(
                 f"B{b}:{sum(v)/len(v):.2f}" if v else f"B{b}:-"
                 for b, v in block_ce.items()
             )
-            print(f"Step {step:5d}/{args.steps} ({sps:4.1f} it/s, lr={lr:.1e}) | Train CE -> {train_str}")
+            print(f"Step {step:5d}/{cfg.steps} ({sps:4.1f} it/s, lr={lr:.1e}) | Train CE -> {train_str}")
             block_ce = {b: [] for b in range(cfg.num_blocks)}
 
-        if step % val_every == 0 or step == args.steps:
-            val_res = evaluate_per_block(model, val_tokens, args.batch_size, args.seq_len, device)
+        if step % val_every == 0 or step == cfg.steps:
+            val_res = evaluate_per_block(
+                model,
+                val_tokens,
+                cfg.batch_size,
+                cfg.max_seq_len,
+                device,
+                batches_per_block=cfg.eval_batches_per_block,
+            )
             val_str = " | ".join(f"B{b}:{v:.2f}" for b, v in val_res.items())
             print(f"  [Val CE] {val_str}")
 
-        if step == args.steps // 2:
+        if step == cfg.steps // 2:
             preview = generate_story(
-                model, tokenizer, "Once upon a time, there was a little ", device, max_new_tokens=60
+                model,
+                tokenizer,
+                "Once upon a time, there was a little ",
+                device,
+                max_new_tokens=60,
+                num_steps=cfg.inference_steps or cfg.num_blocks,
+                temperature=cfg.temperature,
             )
             print(f"  [Zwischen-Sample] {preview}\n")
 
@@ -288,7 +307,13 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
     print("\n=== Generierte TinyStories ===")
     for prompt, temp in prompts:
         story = generate_story(
-            model, tokenizer, prompt, device, max_new_tokens=120, num_steps=4, temperature=temp
+            model,
+            tokenizer,
+            prompt,
+            device,
+            max_new_tokens=cfg.max_new_tokens,
+            num_steps=cfg.inference_steps or cfg.num_blocks,
+            temperature=temp,
         )
         print(f"\n[Prompt (temp={temp})]: {prompt!r}")
         print(story)
@@ -310,8 +335,8 @@ def generate_from_checkpoint(args: argparse.Namespace, device: torch.device) -> 
         tokenizer,
         args.prompt,
         device,
-        max_new_tokens=140,
-        num_steps=4,
+        max_new_tokens=cfg.max_new_tokens,
+        num_steps=cfg.inference_steps or cfg.num_blocks,
         temperature=args.temperature,
     )
     print(f"\n[Prompt (temp={args.temperature})]: {args.prompt!r}")
@@ -319,18 +344,23 @@ def generate_from_checkpoint(args: argparse.Namespace, device: torch.device) -> 
 
 
 def main() -> None:
+    defaults = ARConfig()
     parser = argparse.ArgumentParser(description="TinyStories Training mit AR DiffusionBlocks")
-    parser.add_argument("--steps", type=int, default=8000, help="Anzahl Trainingsschritte")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch-Größe")
+    parser.add_argument("--steps", type=int, default=defaults.steps, help="Anzahl Trainingsschritte")
+    parser.add_argument("--batch-size", type=int, default=defaults.batch_size, help="Batch-Größe")
     parser.add_argument("--seq-len", type=int, default=192, help="Kontextlänge in Tokens")
-    parser.add_argument("--lr", type=float, default=6e-4, help="Maximale Lernrate")
-    parser.add_argument("--num-stories", type=int, default=50_000, help="Anzahl Trainings-Stories")
-    parser.add_argument("--vocab-size", type=int, default=4096, help="BPE-Vokabulargröße")
+    parser.add_argument("--dim", type=int, default=384, help="Modell-Dimension")
+    parser.add_argument("--num-heads", type=int, default=6, help="Anzahl Attention-Heads")
+    parser.add_argument("--num-layers", type=int, default=8, help="Gesamtanzahl Layer")
+    parser.add_argument("--num-blocks", type=int, default=defaults.num_blocks, help="Anzahl Diffusion-Blöcke")
+    parser.add_argument("--lr", type=float, default=defaults.lr, help="Maximale Lernrate")
+    parser.add_argument("--num-stories", type=int, default=defaults.num_train_stories, help="Anzahl Trainings-Stories")
+    parser.add_argument("--vocab-size", type=int, default=defaults.bpe_vocab_size, help="BPE-Vokabulargröße")
     parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR)
     parser.add_argument("--ckpt-path", type=str, default=DEFAULT_CKPT_PATH)
     parser.add_argument("--generate-only", action="store_true", help="Nur Checkpoint laden & generieren")
     parser.add_argument("--prompt", type=str, default="Once upon a time, there was a little ")
-    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--temperature", type=float, default=defaults.temperature)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
