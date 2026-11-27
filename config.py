@@ -123,6 +123,7 @@ class ARConfig:
 
     # Daten & Evaluation
     dataset_name: str = "roneneldan/TinyStories"
+    tokenizer_name: str = "gpt2"
     num_train_stories: int = 50_000
     num_val_stories: int = 1_000
     bpe_vocab_size: int = 4096

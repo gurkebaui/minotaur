@@ -23,16 +23,16 @@ if not sys.path or sys.path[0] != _ROOT:
 
 from datasets import load_dataset
 import numpy as np
-from tokenizers import Tokenizer, decoders, models, pre_tokenizers, trainers
 import torch
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from config import ARConfig
 from DiffusionBlocks.Dif_ar import ARDiffusionBlocksModel
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DATA_DIR = os.path.join(BASE_DIR, "tinystories_data")
-DEFAULT_CKPT_PATH = os.path.join(BASE_DIR, "checkpoints", "tinystories_dblocks.pt")
+DEFAULT_DATA_DIR = os.path.join(BASE_DIR, "tinystories_data_gpt2")
+DEFAULT_CKPT_PATH = os.path.join(BASE_DIR, "checkpoints", "tinystories_dblocks_gpt2.pt")
 
 
 def prepare_tinystories_data(
@@ -40,20 +40,20 @@ def prepare_tinystories_data(
     dataset_name: str = "roneneldan/TinyStories",
     num_train_stories: int = 50_000,
     num_val_stories: int = 1_000,
-    vocab_size: int = 4096,
-) -> tuple[Tokenizer, np.ndarray, np.ndarray]:
+    tokenizer_name: str = "gpt2",
+) -> tuple[PreTrainedTokenizerBase, np.ndarray, np.ndarray]:
     """
-    Lädt einen Teil von TinyStories per Streaming, trainiert einen kompakten BPE-Tokenizer (4096)
+    Lädt einen Teil von TinyStories per Streaming, tokenisiert ihn mit dem GPT-2-Tokenizer
     und speichert die tokenisierten Streams als uint16-NumPy-Dateien im Cache.
     """
     os.makedirs(data_dir, exist_ok=True)
-    tok_path = os.path.join(data_dir, "tokenizer.json")
     train_path = os.path.join(data_dir, "train_tokens.npy")
     val_path = os.path.join(data_dir, "val_tokens.npy")
 
-    if os.path.exists(tok_path) and os.path.exists(train_path) and os.path.exists(val_path):
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+    if os.path.exists(train_path) and os.path.exists(val_path):
         print(f"Lade gecachte Daten aus {data_dir} ...")
-        tokenizer = Tokenizer.from_file(tok_path)
         train_tokens = np.load(train_path, mmap_mode="r")
         val_tokens = np.load(val_path, mmap_mode="r")
         return tokenizer, train_tokens, val_tokens
@@ -66,26 +66,12 @@ def prepare_tinystories_data(
     train_texts = [ex["text"] for ex in itertools.islice(train_ds, num_train_stories)]
     val_texts = [ex["text"] for ex in itertools.islice(val_ds, num_val_stories)]
 
-    print("Trainiere ByteLevel-BPE Tokenizer ...")
-    tokenizer = Tokenizer(models.BPE(unk_token="<unk>"))
-    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
-    tokenizer.decoder = decoders.ByteLevel()
-
-    trainer = trainers.BpeTrainer(
-        vocab_size=vocab_size,
-        special_tokens=["<bos>", "<eos>", "<unk>"],
-        show_progress=False,
-    )
-    tokenizer.train_from_iterator(train_texts, trainer=trainer)
-    tokenizer.save(tok_path)
-
-    bos_id = tokenizer.token_to_id("<bos>")
-    eos_id = tokenizer.token_to_id("<eos>")
+    bos_id = tokenizer.bos_token_id if tokenizer.bos_token_id is not None else tokenizer.eos_token_id
+    eos_id = tokenizer.eos_token_id
 
     def encode_corpus(texts: list[str]) -> np.ndarray:
-        chunks = []
-        for enc in tokenizer.encode_batch(texts):
-            chunks.append(np.array([bos_id] + enc.ids + [eos_id], dtype=np.uint16))
+        encoded = tokenizer(texts, add_special_tokens=False)["input_ids"]
+        chunks = [np.array([bos_id] + ids + [eos_id], dtype=np.uint16) for ids in encoded]
         return np.concatenate(chunks)
 
     train_tokens = encode_corpus(train_texts)
@@ -154,7 +140,7 @@ def get_lr(step: int, total_steps: int, warmup_steps: int, max_lr: float, min_lr
 
 def generate_story(
     model: ARDiffusionBlocksModel,
-    tokenizer: Tokenizer,
+    tokenizer: PreTrainedTokenizerBase,
     prompt: str,
     device: torch.device,
     max_new_tokens: int = 120,
@@ -162,10 +148,10 @@ def generate_story(
     temperature: float = 0.0,
 ) -> str:
     """Generiert eine Geschichte ab `prompt` und stoppt sauber bei <eos>."""
-    bos_id = tokenizer.token_to_id("<bos>")
-    eos_id = tokenizer.token_to_id("<eos>")
+    bos_id = tokenizer.bos_token_id if tokenizer.bos_token_id is not None else tokenizer.eos_token_id
+    eos_id = tokenizer.eos_token_id
 
-    prompt_ids = [bos_id] + tokenizer.encode(prompt).ids
+    prompt_ids = [bos_id] + tokenizer.encode(prompt, add_special_tokens=False)
     inp = torch.tensor([prompt_ids], dtype=torch.long, device=device)
 
     amp_ctx = (
@@ -182,7 +168,7 @@ def generate_story(
     gen_ids = out_ids[1:]
     if eos_id in gen_ids:
         gen_ids = gen_ids[: gen_ids.index(eos_id)]
-    return tokenizer.decode(gen_ids)
+    return tokenizer.decode(gen_ids, skip_special_tokens=True)
 
 
 def train(args: argparse.Namespace, device: torch.device) -> None:
@@ -197,7 +183,7 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
         steps=args.steps,
         lr=args.lr,
         num_train_stories=args.num_stories,
-        bpe_vocab_size=args.vocab_size,
+        tokenizer_name=args.tokenizer,
     )
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -207,9 +193,9 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
         dataset_name=cfg.dataset_name,
         num_train_stories=cfg.num_train_stories,
         num_val_stories=cfg.num_val_stories,
-        vocab_size=cfg.bpe_vocab_size,
+        tokenizer_name=cfg.tokenizer_name,
     )
-    cfg.vocab_size = tokenizer.get_vocab_size()
+    cfg.vocab_size = len(tokenizer)
 
     model = ARDiffusionBlocksModel(cfg).to(device)
     num_params = sum(p.numel() for p in model.parameters())
@@ -321,11 +307,9 @@ def train(args: argparse.Namespace, device: torch.device) -> None:
 
 def generate_from_checkpoint(args: argparse.Namespace, device: torch.device) -> None:
     """Lädt einen gespeicherten Checkpoint und generiert Text zu `args.prompt`."""
-    tok_path = os.path.join(args.data_dir, "tokenizer.json")
-    tokenizer = Tokenizer.from_file(tok_path)
-
     ckpt = torch.load(args.ckpt_path, map_location=device, weights_only=True)
     cfg = ARConfig(**ckpt["config"])
+    tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_name)
     model = ARDiffusionBlocksModel(cfg).to(device)
     model.load_state_dict(ckpt["model_state"])
     model.eval()
@@ -355,7 +339,7 @@ def main() -> None:
     parser.add_argument("--num-blocks", type=int, default=defaults.num_blocks, help="Anzahl Diffusion-Blöcke")
     parser.add_argument("--lr", type=float, default=defaults.lr, help="Maximale Lernrate")
     parser.add_argument("--num-stories", type=int, default=defaults.num_train_stories, help="Anzahl Trainings-Stories")
-    parser.add_argument("--vocab-size", type=int, default=defaults.bpe_vocab_size, help="BPE-Vokabulargröße")
+    parser.add_argument("--tokenizer", type=str, default=defaults.tokenizer_name, help="HuggingFace Tokenizer-Name (z. B. gpt2)")
     parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR)
     parser.add_argument("--ckpt-path", type=str, default=DEFAULT_CKPT_PATH)
     parser.add_argument("--generate-only", action="store_true", help="Nur Checkpoint laden & generieren")
