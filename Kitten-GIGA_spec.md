@@ -19,3 +19,6 @@ outputs:
 text for the first prototype, later (maybe) images and audio as well
 
 target: beat lfm2.5 750M base
+
+1.part .
+result: diffusion Blocks is way worse than baseline transformer. will not make it into final architecture as is.
