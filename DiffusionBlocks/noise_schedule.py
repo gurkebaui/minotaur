@@ -130,9 +130,12 @@ def edm_preconditioning(
     return c_skip, c_out, c_in, c_noise
 
 
-def edm_loss_weight(sigma: torch.Tensor, sigma_data: float = 0.5) -> torch.Tensor:
+def edm_loss_weight(
+    sigma: torch.Tensor, sigma_data: float = 0.5, max_weight: float | None = 10.0
+) -> torch.Tensor:
     """
     EDM Loss-Gewichtung w(sigma) = (sigma^2 + sigma_data^2) / (sigma * sigma_data)^2.
-    Gleicht den Sampling-Bias der Log-Normal-Verteilung aus.
+    Gleicht den Sampling-Bias der Log-Normal-Verteilung aus (geclippt gegen Low-Noise-Spikes bei CE).
     """
-    return (sigma**2 + sigma_data**2) / (sigma * sigma_data) ** 2
+    w = (sigma**2 + sigma_data**2) / (sigma * sigma_data) ** 2
+    return w.clamp(max=max_weight) if max_weight is not None else w

@@ -113,6 +113,9 @@ def train_model(
     amp_ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if device.type == "cuda" else nullcontext()
     log_every = max(1, steps // 4)
     it = iter(train_loader)
+    is_multiblock = hasattr(model, "config") and hasattr(model.config, "num_blocks")
+    block_ce = {b: [] for b in range(model.config.num_blocks)} if is_multiblock else None
+    ce_buf = []
 
     model.train()
     t0 = time.time()
@@ -129,17 +132,29 @@ def train_model(
             if name == "baseline":
                 logits = model(x)
                 loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1))
-                ce_val = float(loss.item())
+                ce_buf.append(float(loss.item()))
             else:
                 loss, info = model.training_loss(_batch_to_tokens(x, y))
-                ce_val = info["ce_loss"]
+                if block_ce is not None:
+                    block_ce[info["block_idx"]].append(info["ce_loss"])
+                else:
+                    ce_buf.append(info["ce_loss"])
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
         if step % log_every == 0 or step == steps:
-            print(f"  [{name}] Step {step:4d}/{steps} | Train CE: {ce_val:.3f}")
+            if block_ce is not None:
+                summary = " | ".join(
+                    f"B{b}:{sum(v)/len(v):.3f}" if v else f"B{b}:-"
+                    for b, v in block_ce.items()
+                )
+                print(f"  [{name}] Step {step:4d}/{steps} | Ø Train CE -> {summary}")
+                block_ce = {b: [] for b in range(model.config.num_blocks)}
+            else:
+                print(f"  [{name}] Step {step:4d}/{steps} | Ø Train CE: {sum(ce_buf)/len(ce_buf):.3f}")
+                ce_buf.clear()
 
     elapsed = time.time() - t0
     os.makedirs("checkpoints", exist_ok=True)
@@ -160,7 +175,7 @@ def eval_ppl(
     torch.manual_seed(0)
     model.eval()
     amp_ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if device.type == "cuda" else nullcontext()
-    ces, b0_ces = [], []
+    ces, extra_ces = [], []
 
     for i, (x, y) in enumerate(eval_loader):
         if i >= eval_batches:
@@ -169,21 +184,33 @@ def eval_ppl(
         with amp_ctx:
             if name == "baseline":
                 logits = model(x)
-                ce = float(F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1)).item())
-                ces.append(ce)
+                ces.append(float(F.cross_entropy(logits.reshape(-1, logits.size(-1)), y.reshape(-1)).item()))
             elif name in ("dif_legacy", "dif_moe"):
                 toks = _batch_to_tokens(x, y)
                 block_ces = [model.training_loss(toks, block_idx=b)[1]["ce_loss"] for b in range(model.config.num_blocks)]
-                ces.append(sum(block_ces) / len(block_ces))
-                b0_ces.append(block_ces[0])
+                ces.append(block_ces[0])
+                extra_ces.append(sum(block_ces) / len(block_ces))
             else:
-                _, info = model.training_loss(_batch_to_tokens(x, y))
+                toks = _batch_to_tokens(x, y)
+                _, info = model.training_loss(toks)
                 ces.append(info["ce_loss"])
+                x_ids, y_ids = toks[:, :-1], toks[:, 1:]
+                sigma_hi = torch.full((x_ids.size(0),), model.config.sigma_max, device=device)
+                z_hi = model.get_normalized_embeddings(y_ids) + sigma_hi[:, None, None] * torch.randn(
+                    x_ids.size(0), x_ids.size(1), model.config.dim, device=device
+                )
+                logits_hi = model.denoise_train(x_ids, z_hi, sigma_hi)
+                extra_ces.append(float(F.cross_entropy(logits_hi.reshape(-1, logits_hi.size(-1)), y_ids.reshape(-1)).item()))
 
-    mean_ce = sum(ces) / max(1, len(ces))
-    ppl = math.exp(min(mean_ce, 20.0))
-    extra = f"B0 CE={sum(b0_ces)/len(b0_ces):.3f}" if b0_ces else "-"
-    return mean_ce, ppl, extra
+    val_ce = sum(ces) / max(1, len(ces))
+    ppl = math.exp(min(val_ce, 20.0))
+    if name in ("dif_legacy", "dif_moe"):
+        extra = f"Mean CE={sum(extra_ces)/max(1, len(extra_ces)):.3f}"
+    elif extra_ces:
+        extra = f"σ_max CE={sum(extra_ces)/len(extra_ces):.3f}"
+    else:
+        extra = "-"
+    return val_ce, ppl, extra
 
 
 @torch.no_grad()
@@ -253,9 +280,12 @@ def main() -> None:
         torch.manual_seed(42)
         model, cfg_dict = build_model(name, train_cfg, vocab_size, device)
         params = sum(p.numel() for p in model.parameters()) / 1e6
-        print(f"\n=== Training {name} ({params:.2f}M Params, {args.steps} Steps, Device={device}) ===")
+        num_blocks = model.config.num_blocks if (hasattr(model, "config") and hasattr(model.config, "num_blocks")) else 1
+        model_steps = args.steps * num_blocks
+        step_note = f"{model_steps} Steps ({args.steps}/Block)" if num_blocks > 1 else f"{model_steps} Steps"
+        print(f"\n=== Training {name} ({params:.2f}M Params, {step_note}, Device={device}) ===")
 
-        elapsed, ckpt_path = train_model(name, model, cfg_dict, train_loader, args.steps, args.lr, device)
+        elapsed, ckpt_path = train_model(name, model, cfg_dict, train_loader, model_steps, args.lr, device)
         val_ce, val_ppl, extra = eval_ppl(name, model, eval_loader, args.eval_batches, device)
         generate_samples(name, model, train_ds.tokenizer, train_cfg.seq_len, args.max_new_tokens, device)
         results.append((name, params, elapsed, val_ce, val_ppl, extra, ckpt_path))
