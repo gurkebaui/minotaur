@@ -156,6 +156,15 @@
   * Modded-NanoGPT: <https://github.com/KellerJordan/modded-nanogpt>
   * muP: <https://github.com/microsoft/mup>
 
+### 1.15 LFM3 Tri-Hybrid Sequence Mixing (Gated Short Conv $k=7$ + SWA + Global Attention + Head-Wise Gating)
+* **Rank:** **S**
+* **Kurz-Zusammenfassung:** Kombiniert im 3-fachen LFM3-Mix drei Sequence-Mixer: **~50 % Double-Gated Short Convolutions ($k=7$)** für extrem billiges lokales Token-Mixing, **~20–25 % Sliding-Window Attention (SWA, z. B. $W=256$)** als mittlere Brücke und **~25 % Global Attention (GQA/MLA)** für Langzeit-Kontext. Ergänzt durch **Head-Wise Gating** (unterdrückt Aktivierungs-Outlier für deutlich stabileres FP8/INT8-Training auf der 4060 Ti) und **Partial RoPE**. Da Modell B ohne Loops arbeitet, ist dieser 3-fache Mix direkt produktiv einsetzbar.
+* **Spart:** **Attention-FLOPs** (massiv ab >2k Kontext), **KV-Cache-VRAM** (nur ein winziger 6-Token-Ringbuffer für die Conv-Layer), **HBM-Bandwidth**.
+* **Zahlt:** Etwas komplexerer Layer-Schedule (Abstimmung des Conv/SWA/Global-Verhältnisses).
+* **Qualitätsverlust:** **Keiner bis Minimal** (Head-Wise Gating wirkt bei FP8/INT8 sogar **Positiv**).
+* **Quellen:**
+  * Liquid AI LFM2 / LFM3 Hybrid Architecture (Tri-Hybrid: Gated Short Convolutions + SWA + GQA).
+
 ---
 
 ## 2. A-Rank Methoden (Performance-, Architektur- & Lossy-Booster)
@@ -211,9 +220,9 @@
   * APOLLO: <https://arxiv.org/abs/2412.05270>
   * bitsandbytes (8-bit Optimizer): <https://github.com/bitsandbytes-foundation/bitsandbytes>
 
-### 2.6 Hybrid Sliding-Window Attention & Cross-Layer Attention (CLA) / YOCO
+### 2.6 Cross-Layer Attention (CLA) / YOCO (Ergänzung zum LFM3-SWA-Mix)
 * **Rank:** **A**
-* **Kurz-Zusammenfassung:** Kombiniert lokale Sliding-Window-Attention mit wenigen Full-Attention-Layern (z. B. 3:1) und teilt K/V-Projektionen über Layer-Blöcke (**CLA**) bzw. via globalem KV-Cache (**YOCO**).
+* **Kurz-Zusammenfassung:** Da Sliding-Window Attention (SWA) bereits fest im 3-fachen LFM3-Mix (siehe **1.15**) verankert ist, steuert dieser Punkt zusätzlich **Cross-Layer Attention (CLA)** (Teilen von K/V-Projektionen über Layer-Blöcke hinweg) bzw. **YOCO** (einmaliger globaler KV-Cache für obere Cross-Decoder-Layer) bei.
 * **Spart:** **Compute** ($O(N^2) \to O(N \cdot W)$), **HBM-Bandwidth**, **Aktivierungs-VRAM**.
 * **Zahlt:** Leicht reduzierter Long-Range-Recall bei zu wenigen Global-Layern.
 * **Qualitätsverlust:** **Minimal**.
