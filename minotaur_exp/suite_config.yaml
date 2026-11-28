@@ -1,0 +1,62 @@
+# ==============================================================================
+# Übergeordnete Suite-Konfiguration für minotaur_exp
+# ==============================================================================
+# Hier steuerst du zentral, welche Experimente laufen, wie lange sie maximal
+# dauern, welches Daten-Preset verwendet wird und wo die Logs landen.
+#
+# Verfügbare Experiment-IDs (oder ganze Gruppen wie "exp0", "exp1", ... oder "all"):
+#   exp0: 0a (25m), 0b (45m), 0_sweep (20m)     -> Baseline & Systems-Bundle
+#   exp1: 1a (72m), 1b (78m)                    -> Ultra-Low-VRAM & Präzision
+#   exp2: 2a (90m), 2b (90m)                    -> CoLA + LFM3 + SuperBPE + MTP
+#   exp3: 3a (90m), 3b (90m)                    -> UltraMemV2 & Self-Growth
+#   exp4: 4a (90m), 4b (90m)                    -> JEST, Rho-1++ & Offline Distill
+#   exp5: 5a (90m), 5b (90m)                    -> Run 2: Huginn Loop & MoR
+#   exp6: 6a (75m), 6b (75m)                    -> Run 2 Exp: LFM3-YOCO-Loop & CTM-Light
+# ==============================================================================
+
+selected_experiments:
+  - "all"
+
+# "proxy_150m" (echte Mini-Experimente) | "tiny_smoke" (Sekunden-Test) | "target_3b"
+model_scale: "proxy_150m"
+
+# Faktor für alle max_minutes (z.B. 0.5 = halbes Zeitbudget pro Experiment)
+time_scale: 1.0
+
+hardware:
+  device: "cuda"
+  compile_mode: "default"
+  allow_tf32: true
+
+data:
+  # "fineweb_edu" (Stream + Cache, Fallback auf tinystories falls offline)
+  # "tinystories" (bereits lokal im HF-Cache vorhanden)
+  # "synthetic"   (sofortiger lokaler Test-Korpus ohne Download)
+  dataset_preset: "fineweb_edu"
+  cache_dir: "minotaur_exp/cache"
+  train_tokens: 50000000
+  val_tokens: 2000000
+  seq_len: 1024
+  batch_size: 4
+  grad_accum_steps: 1
+  teacher_model: "gpt2"
+  superbpe_vocab_size: 65536
+
+logging:
+  logs_root: "minotaur_exp/logs"
+  run_tag: ""
+  log_every_steps: 20
+  eval_every_steps: 200
+  save_checkpoints: true
+  continue_on_error: true
+
+# Optional: Checkpoints aus früheren Runs wiederverwenden (z.B. "5a": "pfad/zu/2a/checkpoint.pt")
+checkpoint_overrides: {}
+
+# Optional: Einzelne Felder pro Experiment-ID überschreiben
+# Beispiel:
+# experiment_overrides:
+#   "1b":
+#     lr: 0.0002
+#     max_minutes: 60.0
+experiment_overrides: {}
